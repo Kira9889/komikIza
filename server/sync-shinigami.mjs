@@ -243,21 +243,39 @@ async function main() {
       chapterTotal += chapters.length
 
       if (!args['skip-pages']) {
+        // Lewati chapter yang pages-nya sudah tersimpan (aman diulang / resume).
+        const existingPages = await query('select id, pages from chapters where manga_id = $1', [m.id])
+        const hasPages = new Set(
+          existingPages.filter(r => Array.isArray(r.pages) && r.pages.length).map(r => r.id),
+        )
+        let skipped = 0
         for (const c of chapters) {
-          try {
-            const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
-            const pages = mapPages(detail)
-              .filter(p => isAllowedImage(p.imageUrl))
-              .map(p => ({ index: p.index, url: p.imageUrl }))
-            if (pages.length) {
-              await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
-              pageTotal += pages.length
-            }
-            await delay(250)
-          } catch (e) {
-            console.error(`  [${m.title}] pages ${c.name} gagal: ${e.message}`)
+          if (hasPages.has(c.id)) {
+            skipped += 1
+            continue
           }
+          let saved = false
+          for (let attempt = 1; attempt <= 3 && !saved; attempt += 1) {
+            try {
+              const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
+              const pages = mapPages(detail)
+                .filter(p => isAllowedImage(p.imageUrl))
+                .map(p => ({ index: p.index, url: p.imageUrl }))
+              if (pages.length) {
+                await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
+                pageTotal += pages.length
+                saved = true
+              } else {
+                break
+              }
+            } catch (e) {
+              if (attempt === 3) console.error(`  [${m.title}] pages ${c.name} gagal: ${e.message}`)
+              else await delay(1000 * attempt)
+            }
+          }
+          await delay(250)
         }
+        if (skipped) console.log(`  (${skipped} chapter sudah ada, dilewati)`)
       }
       console.log(`OK ${m.title}: ${chapters.length} chapter`)
     } catch (e) {

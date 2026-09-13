@@ -1,0 +1,177 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   IzaLib — Digital Manga Library design system
+   Tema gelap ala Shinigami Scans.
+   ============================================================ */
+
+@theme {
+  --font-display: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+
+  --color-base-bg: #18181b;
+  --color-base-dark: #09090b;
+  --color-base-card: #27272a;
+  --color-base-card-2: #2f2f33;
+
+  --color-primary-400: #805bf7;
+  --color-primary-500: #6f39ee;
+  --color-primary-600: #5a2bd6;
+
+  --color-general-100: #f4f4f5;
+  --color-general-200: #e4e4e7;
+  --color-general-300: #a1a1aa;
+  --color-general-400: #71717a;
+  --color-general-500: #52525b;
+
+  --animate-rise: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  --animate-fade: fade 0.45s ease both;
+
+  @keyframes rise {
+    0% { opacity: 0; transform: translateY(24px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+}
+
+:root {
+  --bg: #18181b;
+  --bg-dark: #09090b;
+  --card: #27272a;
+  --card-2: #2f2f33;
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #f4f4f5;
+  --muted: #71717a;
+  --accent: #6f39ee;
+}
+
+:root:not(.dark) {
+  --bg: #f4f5f8;
+  --bg-dark: #e9ebf1;
+  --card: #ffffff;
+  --card-2: #f6f7fa;
+  --line: rgba(15, 23, 42, 0.1);
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #6f39ee;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(111, 57, 238, 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--card-2);
+  border-radius: 8px;
+  border: 2px solid var(--bg-dark);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+@layer components {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .card-manga {
+    background: var(--card);
+    border: 1px solid var(--line);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  }
+  .card-manga:hover {
+    transform: translateY(-5px);
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    transition: filter 0.2s ease, transform 0.2s ease;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--text);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .btn-ghost:hover {
+    background: var(--card-2);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+
+  .input-manga {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 0.6rem 0.9rem;
+    font-size: 0.95rem;
+    border-radius: 0.5rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .input-manga::placeholder {
+    color: var(--muted);
+  }
+  .input-manga:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(111, 57, 238, 0.18);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--card);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .chip-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .gradient-read {
+    background: linear-gradient(180deg, var(--bg) 0%, #09090b 100%);
+  }
+
+  .transition-smooth {
+    transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}

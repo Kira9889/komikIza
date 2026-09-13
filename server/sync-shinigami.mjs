@@ -14,6 +14,7 @@
 //   node sync-shinigami.mjs --skip-pages       # daftar chapter saja
 //   node sync-shinigami.mjs --manga=<id|slug>  # satu judul saja
 //   node sync-shinigami.mjs --limit=5          # batasi jumlah judul
+//   node sync-shinigami.mjs --import           # impor katalog + hubungkan judul saja
 import dotenv from 'dotenv'
 import pg from 'pg'
 
@@ -116,7 +117,97 @@ function isAllowedImage(value) {
   }
 }
 
+function slugify(text) {
+  return String(text)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+function normalizeTitleKey(str) {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019'`]/g, "'")
+    .replace(/[^a-z0-9]/g, '')
+    .trim()
+}
+
+function catalogType(item) {
+  const format = (item.taxonomy?.Format || []).map(e => e.name).join(' ').toLowerCase()
+  if (format.includes('manhua')) return 'manhua'
+  if (format.includes('manga')) return 'manga'
+  return 'manhwa'
+}
+
+async function importCatalog() {
+  const first = await shinigamiJson('/v1/manga/list?page=1&page_size=100&sort=latest')
+  const totalPages = Math.min(Number(first.meta?.total_page || 1), 1000)
+  const catalog = [...(first.data || [])]
+  for (let page = 2; page <= totalPages; page += 1) {
+    const res = await shinigamiJson(`/v1/manga/list?page=${page}&page_size=100&sort=latest`)
+    catalog.push(...(res.data || []))
+    if (page % 10 === 0) console.log(`  katalog hal ${page}/${totalPages}...`)
+    await delay(200)
+  }
+  const items = catalog.filter(i => i?.manga_id && i?.title)
+  console.log(`Katalog: ${items.length} judul`)
+
+  const existing = await query('select id, title, shinigami_id from manga')
+  const byTitle = new Map(existing.map(r => [normalizeTitleKey(r.title), r]))
+  let linked = 0
+  for (const item of items) {
+    const local = byTitle.get(normalizeTitleKey(item.title))
+    if (local && !local.shinigami_id) {
+      await query('update manga set shinigami_id = $1 where id = $2', [item.manga_id, local.id])
+      local.shinigami_id = item.manga_id
+      linked += 1
+    }
+  }
+
+  const rows = items.map(item => ({
+    slug: `${slugify(item.title).slice(0, 80) || 'manga'}-${String(item.manga_id).slice(0, 8)}`,
+    title: item.title,
+    type: catalogType(item),
+    status: Number(item.status) === 2 ? 'Completed' : 'Ongoing',
+    description: item.description || '',
+    cover_url: item.cover_portrait_url || item.cover_image_url || '',
+    banner_url: item.cover_image_url || '',
+    shinigami_id: item.manga_id,
+    alternative_names: String(item.alternative_title || '').split(',').map(n => n.trim()).filter(Boolean),
+    tags: (item.taxonomy?.Genre || []).map(g => g.name).filter(Boolean),
+  }))
+  const result = await query(
+    `insert into manga (slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags)
+     select slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags
+     from jsonb_to_recordset($1::jsonb) as source(
+       slug text, title text, type text, status text, description text, cover_url text, banner_url text,
+       shinigami_id text, alternative_names text[], tags text[]
+     )
+     on conflict (shinigami_id) where shinigami_id is not null do update set
+       title = excluded.title,
+       type = excluded.type,
+       status = excluded.status,
+       description = excluded.description,
+       cover_url = case when manga.cover_url like '%placehold.co%' or manga.cover_url = '' or manga.cover_url is null
+                        then excluded.cover_url else manga.cover_url end,
+       banner_url = case when manga.banner_url like '%placehold.co%' or manga.banner_url = '' or manga.banner_url is null
+                         then excluded.banner_url else manga.banner_url end,
+       alternative_names = excluded.alternative_names,
+       tags = excluded.tags
+     returning id`,
+    [JSON.stringify(rows)],
+  )
+  console.log(`Impor selesai: ${linked} judul lokal dihubungkan, ${result.length} baris katalog tersimpan.`)
+}
+
 async function main() {
+  if (args.import) {
+    await importCatalog()
+    await pool.end()
+    return
+  }
   let mangas = await query(
     `select id, slug, title, shinigami_id from manga where shinigami_id is not null and shinigami_id <> '' order by title`,
   )

@@ -43,7 +43,7 @@ export interface Manga {
   description: string
   cover_url: string
   banner_url?: string
-  /** ID seri dari Shinigami. Jika diisi, daftar chapter selalu diambil live. */
+  /** ID seri dari Shinigami. Jika diisi, daftar chapter diambil live dengan fallback ke DB lokal. */
   shinigami_id?: string
   alternative_names: string[]
   views_count: number

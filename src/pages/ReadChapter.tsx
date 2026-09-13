@@ -203,6 +203,8 @@ function ChapterImage({
   onClick: () => void
 }) {
   const [loaded, setLoaded] = useState(false)
+  const [direct, setDirect] = useState(false)
+  const shown = direct ? directImageUrl(src) : src
 
   return (
     <div className="relative mx-auto w-full max-w-200 bg-neutral-900">
@@ -212,10 +214,15 @@ function ChapterImage({
       )}
 
       <img
-        src={src}
+        src={shown}
         alt={alt}
         loading={index > 2 ? 'lazy' : 'eager'}
         onLoad={() => setLoaded(true)}
+        // Sekali saja: kalau proxy backend gagal (mis. CDN sumber menolak
+        // IP server), coba URL CDN langsung di browser.
+        onError={() => {
+          if (!direct) setDirect(true)
+        }}
         onClick={onClick}
         className={`block h-auto w-full cursor-pointer transition-opacity duration-300 ${
           loaded ? 'opacity-100' : 'opacity-0'
@@ -223,6 +230,20 @@ function ChapterImage({
       />
     </div>
   )
+}
+
+// Ambil URL CDN asli dari balik proxy /api/shinigami/image?url=...
+function directImageUrl(src: string): string {
+  try {
+    const u = new URL(src, window.location.origin)
+    if (u.pathname === '/api/shinigami/image') {
+      const direct = u.searchParams.get('url')
+      if (direct) return direct
+    }
+  } catch {
+    /* abaikan, pakai src asli */
+  }
+  return src
 }
 
 function ReaderControls({

@@ -371,15 +371,43 @@ function invalidateMangaCache() {
   mangaCacheTime = 0
 }
 
+// URL absolut ke backend sendiri (relatif /api/... rusak saat frontend
+// di-host terpisah seperti Netlify). Di localhost pakai protokol request,
+// di hosting selalu https agar tidak mixed-content.
+function absoluteUrl(req, path) {
+  const host = req.get('host') || ''
+  const proto = /localhost|127\.0\.0\.1/.test(host) ? req.protocol : 'https'
+  return `${proto}://${host}${path}`
+}
+
+function proxyImageUrl(req, imageUrl) {
+  return absoluteUrl(req, `/api/shinigami/image?url=${encodeURIComponent(imageUrl)}`)
+}
+
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 
 // ---------------- SHINIGAMI (live chapter source) ----------------
 app.get('/api/shinigami/chapter/:chapterId/pages', async (req, res) => {
   try {
+    // 1) Utamakan pages yang sudah tersimpan di DB (hasil sync lokal) —
+    //    tetap bisa dibaca meski IP server diblokir sumber.
+    if (isValidUuid(req.params.chapterId)) {
+      const stored = await query('select pages from chapters where id = $1', [req.params.chapterId])
+      const saved = stored[0]?.pages
+      if (Array.isArray(saved) && saved.length) {
+        return res.json(
+          saved.map((page, index) => ({
+            index,
+            url: proxyImageUrl(req, typeof page === 'string' ? page : page.url),
+          })),
+        )
+      }
+    }
+    // 2) Live dari sumber.
     const payload = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(req.params.chapterId)}`)
     const pages = shinigamiPages(payload)
       .filter(page => isAllowedShinigamiImage(page.imageUrl))
-      .map(page => ({ index: page.index, url: `/api/shinigami/image?url=${encodeURIComponent(page.imageUrl)}` }))
+      .map(page => ({ index: page.index, url: proxyImageUrl(req, page.imageUrl) }))
     res.json(pages)
   } catch (e) {
     console.error(e)
@@ -704,17 +732,33 @@ app.get('/api/manga/:mangaId/chapters', async (req, res) => {
     if (!isValidUuid(mangaId)) return res.status(400).json({ error: 'ID tidak valid' })
     const source = await query('select shinigami_id from manga where id = $1', [mangaId])
     if (!source[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
+    // Live-first: coba ambil dari sumber. Kalau gagal (mis. IP server
+    // diblokir sumber) jatuh ke baris lokal hasil sync agar tidak 500.
     if (source[0].shinigami_id) {
-      const payload = await shinigamiJson(`/v1/chapter/${encodeURIComponent(source[0].shinigami_id)}/list?page_size=3000`)
-      const chapters = shinigamiChapters(mangaId, payload)
-      await syncShinigamiChapters(mangaId, chapters)
-      return res.json(chapters)
+      try {
+        const payload = await shinigamiJson(`/v1/chapter/${encodeURIComponent(source[0].shinigami_id)}/list?page_size=3000`)
+        const chapters = shinigamiChapters(mangaId, payload)
+        await syncShinigamiChapters(mangaId, chapters)
+        return res.json(chapters)
+      } catch (liveError) {
+        console.error(liveError)
+      }
     }
     const rows = await query(
       'select id, manga_id, name, type, sort_order, release_timestamp, pages, pdf_url from chapters where manga_id = $1 order by sort_order asc',
       [mangaId],
     )
-    res.json(rows.map(r => ({ ...r, pages: r.pages || [], pdf_url: r.pdf_url || undefined })))
+    res.json(
+      rows.map(r => ({
+        ...r,
+        pages: r.pages || [],
+        pdf_url: r.pdf_url || undefined,
+        // Baris lokal milik judul mirror diperlakukan seperti chapter
+        // sumber agar reader memuat pages lewat endpoint shinigami
+        // (yang membaca dari DB lebih dulu).
+        ...(source[0].shinigami_id ? { source: 'shinigami' } : {}),
+      })),
+    )
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengambil chapter' })

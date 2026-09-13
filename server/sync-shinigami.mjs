@@ -15,6 +15,7 @@
 //   node sync-shinigami.mjs --manga=<id|slug>  # satu judul saja
 //   node sync-shinigami.mjs --limit=5          # batasi jumlah judul
 //   node sync-shinigami.mjs --limit=100 --offset=200  # cicil per batch
+//   node sync-shinigami.mjs --limit=100 --offset=0 --workers=8  # paralel, jauh lebih cepat
 //   node sync-shinigami.mjs --refresh-pages    # paksa unduh ulang pages
 //   node sync-shinigami.mjs --import           # impor katalog + hubungkan judul saja
 //
@@ -55,6 +56,8 @@ const pool = new pg.Pool({
 })
 const query = async (text, params) => (await pool.query(text, params)).rows
 const delay = ms => new Promise(r => setTimeout(r, ms))
+// Paralelisasi unduhan pages (default 5, maks 16 via --workers=N).
+const workers = Math.max(1, Math.min(Number(args.workers || 5), 16))
 const isValidUuid = v =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''))
 
@@ -260,22 +263,28 @@ async function main() {
           )
           hasPages = new Set(existing.map(r => r.id))
         }
-        for (const [ci, c] of chapters.entries()) {
-          if (hasPages.has(c.id)) continue
-          try {
-            const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
-            const pages = mapPages(detail)
-              .filter(p => isAllowedImage(p.imageUrl))
-              .map(p => ({ index: p.index, url: p.imageUrl }))
-            if (pages.length) {
-              await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
-              pageTotal += pages.length
-            }
-            if ((ci + 1) % 10 === 0) console.log(`  [${m.title}] ${ci + 1}/${chapters.length} chapter...`)
-            await delay(250)
-          } catch (e) {
-            console.error(`  [${m.title}] pages ${c.name} gagal: ${e.message}`)
-          }
+        for (let i = 0; i < chapters.length; i += workers) {
+          const batch = chapters.slice(i, i + workers).filter(c => !hasPages.has(c.id))
+          if (!batch.length) continue
+          const results = await Promise.allSettled(
+            batch.map(async c => {
+              const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
+              const pages = mapPages(detail)
+                .filter(p => isAllowedImage(p.imageUrl))
+                .map(p => ({ index: p.index, url: p.imageUrl }))
+              if (pages.length) {
+                await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
+              }
+              return pages.length
+            }),
+          )
+          results.forEach((r, bi) => {
+            if (r.status === 'fulfilled') pageTotal += r.value
+            else console.error(`  [${m.title}] pages ${batch[bi].name} gagal: ${r.reason?.message || r.reason}`)
+          })
+          const done = Math.min(i + workers, chapters.length)
+          if (done % 10 < workers) console.log(`  [${m.title}] ${done}/${chapters.length} chapter...`)
+          await delay(200)
         }
       }
       console.log(`OK ${m.title}: ${chapters.length} chapter`)

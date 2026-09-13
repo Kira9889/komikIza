@@ -150,7 +150,13 @@ function slugify(text) {
 // CORS dan agar URL gambar yang dapat diproxy dibatasi pada CDN sumbernya.
 async function shinigamiJson(path) {
   const response = await fetch(`${SHINIGAMI_API_URL}${path}`, {
-    headers: { Accept: 'application/json', Origin: SHINIGAMI_ORIGIN },
+    headers: {
+      Accept: 'application/json',
+      Origin: SHINIGAMI_ORIGIN,
+      Referer: `${SHINIGAMI_ORIGIN}/`,
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    },
     signal: AbortSignal.timeout(30_000),
   })
   if (!response.ok) throw new Error(`Sumber chapter tidak tersedia (HTTP ${response.status})`)
@@ -386,7 +392,13 @@ app.get('/api/shinigami/image', async (req, res) => {
   if (!isAllowedShinigamiImage(imageUrl)) return res.status(400).json({ error: 'URL gambar tidak diizinkan' })
   try {
     const upstream = await fetch(imageUrl, {
-      headers: { Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8', Referer: `${SHINIGAMI_ORIGIN}/` },
+      headers: {
+        Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        Origin: SHINIGAMI_ORIGIN,
+        Referer: `${SHINIGAMI_ORIGIN}/`,
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      },
       signal: AbortSignal.timeout(30_000),
     })
     if (!upstream.ok) throw new Error(`Gambar tidak tersedia (HTTP ${upstream.status})`)

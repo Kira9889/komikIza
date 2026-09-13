@@ -51,6 +51,7 @@ const pool = new pg.Pool({
   database: parsed.pathname.slice(1),
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 10000,
+  statement_timeout: 30000,
 })
 const query = async (text, params) => (await pool.query(text, params)).rows
 const delay = ms => new Promise(r => setTimeout(r, ms))
@@ -259,7 +260,7 @@ async function main() {
           )
           hasPages = new Set(existing.map(r => r.id))
         }
-        for (const c of chapters) {
+        for (const [ci, c] of chapters.entries()) {
           if (hasPages.has(c.id)) continue
           try {
             const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
@@ -270,6 +271,7 @@ async function main() {
               await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
               pageTotal += pages.length
             }
+            if ((ci + 1) % 10 === 0) console.log(`  [${m.title}] ${ci + 1}/${chapters.length} chapter...`)
             await delay(250)
           } catch (e) {
             console.error(`  [${m.title}] pages ${c.name} gagal: ${e.message}`)

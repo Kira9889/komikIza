@@ -14,7 +14,12 @@
 //   node sync-shinigami.mjs --skip-pages       # daftar chapter saja
 //   node sync-shinigami.mjs --manga=<id|slug>  # satu judul saja
 //   node sync-shinigami.mjs --limit=5          # batasi jumlah judul
+//   node sync-shinigami.mjs --limit=100 --offset=200  # cicil per batch
+//   node sync-shinigami.mjs --refresh-pages    # paksa unduh ulang pages
 //   node sync-shinigami.mjs --import           # impor katalog + hubungkan judul saja
+//
+// Chapter yang pages-nya sudah ada di DB otomatis dilewati,
+// jadi batch boleh diulang/dicicil kapan saja tanpa mengulang kerja.
 import dotenv from 'dotenv'
 import pg from 'pg'
 
@@ -215,7 +220,9 @@ async function main() {
     mangas = mangas.filter(m => m.id === args.manga || m.slug === args.manga)
     if (!mangas.length) throw new Error(`Judul ${args.manga} tidak ditemukan / tidak punya shinigami_id`)
   }
-  if (args.limit) mangas = mangas.slice(0, Number(args.limit))
+  const offset = Number(args.offset || 0)
+  const limit = args.limit ? Number(args.limit) : mangas.length
+  mangas = mangas.slice(offset, offset + limit)
   console.log(`Sync ${mangas.length} judul...`)
 
   let chapterTotal = 0
@@ -243,39 +250,31 @@ async function main() {
       chapterTotal += chapters.length
 
       if (!args['skip-pages']) {
-        // Lewati chapter yang pages-nya sudah tersimpan (aman diulang / resume).
-        const existingPages = await query('select id, pages from chapters where manga_id = $1', [m.id])
-        const hasPages = new Set(
-          existingPages.filter(r => Array.isArray(r.pages) && r.pages.length).map(r => r.id),
-        )
-        let skipped = 0
-        for (const c of chapters) {
-          if (hasPages.has(c.id)) {
-            skipped += 1
-            continue
-          }
-          let saved = false
-          for (let attempt = 1; attempt <= 3 && !saved; attempt += 1) {
-            try {
-              const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
-              const pages = mapPages(detail)
-                .filter(p => isAllowedImage(p.imageUrl))
-                .map(p => ({ index: p.index, url: p.imageUrl }))
-              if (pages.length) {
-                await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
-                pageTotal += pages.length
-                saved = true
-              } else {
-                break
-              }
-            } catch (e) {
-              if (attempt === 3) console.error(`  [${m.title}] pages ${c.name} gagal: ${e.message}`)
-              else await delay(1000 * attempt)
-            }
-          }
-          await delay(250)
+        // Lewati chapter yang pages-nya sudah ada (kecuali --refresh-pages).
+        let hasPages = new Set()
+        if (!args['refresh-pages']) {
+          const existing = await query(
+            `select id from chapters where manga_id = $1 and coalesce(jsonb_array_length(pages), 0) > 0`,
+            [m.id],
+          )
+          hasPages = new Set(existing.map(r => r.id))
         }
-        if (skipped) console.log(`  (${skipped} chapter sudah ada, dilewati)`)
+        for (const c of chapters) {
+          if (hasPages.has(c.id)) continue
+          try {
+            const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
+            const pages = mapPages(detail)
+              .filter(p => isAllowedImage(p.imageUrl))
+              .map(p => ({ index: p.index, url: p.imageUrl }))
+            if (pages.length) {
+              await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
+              pageTotal += pages.length
+            }
+            await delay(250)
+          } catch (e) {
+            console.error(`  [${m.title}] pages ${c.name} gagal: ${e.message}`)
+          }
+        }
       }
       console.log(`OK ${m.title}: ${chapters.length} chapter`)
     } catch (e) {

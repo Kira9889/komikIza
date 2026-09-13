@@ -249,17 +249,26 @@ async function getShinigamiCatalog() {
   return catalog.filter(item => item?.manga_id && item?.title)
 }
 
+function normalizeTitleKey(str) {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019'`]/g, "'")
+    .replace(/[^a-z0-9]/g, '')
+    .trim()
+}
+
 async function importShinigamiCatalog() {
   const catalog = await getShinigamiCatalog()
   const existing = await query('select id, title, shinigami_id from manga')
-  const byTitle = new Map(existing.map(row => [String(row.title).trim().toLowerCase(), row]))
+  const byTitle = new Map(existing.map(row => [normalizeTitleKey(row.title), row]))
   let linked = 0
 
   // Hubungkan dahulu judul lokal yang namanya sama agar tidak muncul duplikat.
   for (const item of catalog) {
-    const local = byTitle.get(String(item.title).trim().toLowerCase())
+    const local = byTitle.get(normalizeTitleKey(item.title))
     if (local && !local.shinigami_id) {
       await query('update manga set shinigami_id = $1 where id = $2', [item.manga_id, local.id])
+      local.shinigami_id = item.manga_id
       linked += 1
     }
   }

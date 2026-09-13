@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { BookIcon } from '../icons'
+import Logo from '../components/Logo'
 
 export default function Register() {
   const [username, setUsername] = useState('')
@@ -33,9 +33,7 @@ export default function Register() {
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4 py-16">
       <div className="mb-6 flex items-center gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary-500 text-white">
-          <BookIcon className="h-5 w-5" />
-        </span>
+        <Logo size={56} />
         <span className="font-display text-xl font-extrabold">
           Iza<span className="text-primary-500">Lib</span>
         </span>

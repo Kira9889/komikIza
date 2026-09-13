@@ -1,4 +1,4 @@
-import { BookIcon } from '../../icons'
+import Logo from '../Logo'
 
 export default function Footer() {
   return (
@@ -6,9 +6,7 @@ export default function Footer() {
       <div className="mx-auto max-w-6xl px-4 py-10">
         <div className="flex flex-col items-center justify-center gap-6 text-center">
           <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary-500 text-white">
-              <BookIcon className="h-5 w-5" />
-            </span>
+            <Logo size={48} />
             <span className="font-display text-xl font-extrabold">
               Iza<span className="text-primary-500">Lib</span>
             </span>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import Logo from '../Logo'
 import {
   HomeIcon,
   CompassIcon,
@@ -10,7 +11,6 @@ import {
   CloseIcon,
   MoonIcon,
   SunIcon,
-  BookIcon,
 } from '../../icons'
 
 const navLinks = [
@@ -53,9 +53,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 border-b border-(--line) bg-(--bg)/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <NavLink to="/" className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary-500 text-white shadow-[0_0_16px_rgba(111,57,238,0.35)]">
-            <BookIcon className="h-5 w-5" />
-          </span>
+          <Logo size={48} />
           <span className="font-display text-xl font-extrabold tracking-tight">
             Iza<span className="text-primary-500">Lib</span>
           </span>

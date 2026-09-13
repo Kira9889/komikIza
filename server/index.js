@@ -279,7 +279,8 @@ async function importShinigamiCatalog() {
     type: shinigamiMangaType(item),
     status: shinigamiMangaStatus(item.status),
     description: item.description || '',
-    cover_url: item.cover_image_url || item.cover_portrait_url || '',
+    cover_url: item.cover_portrait_url || item.cover_image_url || '',
+    banner_url: item.cover_image_url || '',
     shinigami_id: item.manga_id,
     alternative_names: String(item.alternative_title || '').split(',').map(name => name.trim()).filter(Boolean),
     tags: (item.taxonomy?.Genre || []).map(genre => genre.name).filter(Boolean),
@@ -287,10 +288,10 @@ async function importShinigamiCatalog() {
   if (!rows.length) return { total: 0, linked, imported: 0 }
 
   const result = await query(
-    `insert into manga (slug, title, type, status, description, cover_url, shinigami_id, alternative_names, tags)
-     select slug, title, type, status, description, cover_url, shinigami_id, alternative_names, tags
+    `insert into manga (slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags)
+     select slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags
      from jsonb_to_recordset($1::jsonb) as source(
-       slug text, title text, type text, status text, description text, cover_url text,
+       slug text, title text, type text, status text, description text, cover_url text, banner_url text,
        shinigami_id text, alternative_names text[], tags text[]
      )
      on conflict (shinigami_id) where shinigami_id is not null do update set
@@ -298,7 +299,10 @@ async function importShinigamiCatalog() {
        type = excluded.type,
        status = excluded.status,
        description = excluded.description,
-       cover_url = excluded.cover_url,
+       cover_url = case when manga.cover_url like '%placehold.co%' or manga.cover_url = '' or manga.cover_url is null
+                        then excluded.cover_url else manga.cover_url end,
+       banner_url = case when manga.banner_url like '%placehold.co%' or manga.banner_url = '' or manga.banner_url is null
+                         then excluded.banner_url else manga.banner_url end,
        alternative_names = excluded.alternative_names,
        tags = excluded.tags
      returning id`,

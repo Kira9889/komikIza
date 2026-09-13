@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { MenuIcon, CloseIcon, BookIcon, ArrowLeftIcon } from '../../icons'
+import Logo from '../../components/Logo'
+import { MenuIcon, CloseIcon, ArrowLeftIcon } from '../../icons'
 
 const menu = [
   { to: '/admin/manga', label: 'Buku (Manga)', end: false },
@@ -22,9 +23,7 @@ export default function AdminLayout() {
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-(--line) px-5 py-4">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-500 text-white">
-          <BookIcon className="h-4.5 w-4.5" />
-        </span>
+        <Logo size={40} />
         <div>
           <div className="font-display text-sm font-extrabold">Admin</div>
           <div className="text-[11px] text-general-400">IzaLib</div>

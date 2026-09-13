@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { BookIcon } from '../icons'
+import Logo from '../components/Logo'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -24,17 +24,10 @@ export default function Login() {
     navigate('/', { replace: true })
   }
 
-  const fillAdmin = () => {
-    setEmail('admin@izalib.test')
-    setPassword('admin123')
-  }
-
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-4 py-16">
       <div className="mb-6 flex items-center gap-2">
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary-500 text-white">
-          <BookIcon className="h-5 w-5" />
-        </span>
+        <Logo size={56} />
         <span className="font-display text-xl font-extrabold">
           Iza<span className="text-primary-500">Lib</span>
         </span>
@@ -42,13 +35,6 @@ export default function Login() {
 
       <h1 className="font-display text-2xl font-extrabold">Masuk</h1>
       <p className="mt-1 text-sm text-general-400">Selamat datang kembali.</p>
-
-      <button
-        onClick={fillAdmin}
-        className="mt-4 rounded-lg border border-dashed border-primary-500/50 px-4 py-2 text-xs text-primary-400 transition hover:bg-primary-500/10"
-      >
-        Isi akun demo admin (admin@izalib.test / admin123)
-      </button>
 
       <form onSubmit={submit} className="mt-6 space-y-4">
         {error && (

@@ -50,6 +50,9 @@ export default function AdminManga() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const [page, setPage] = useState(1)
+  const PER_PAGE = 25
+
   const filtered = useMemo(
     () =>
       mangas.filter(m => {
@@ -62,6 +65,16 @@ export default function AdminManga() {
         )
       }),
     [mangas, query],
+  )
+
+  useEffect(() => {
+    setPage(1)
+  }, [query])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  const paged = useMemo(
+    () => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [filtered, page],
   )
 
   const openCreate = () => {
@@ -187,7 +200,7 @@ export default function AdminManga() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(m => (
+                paged.map(m => (
                   <tr key={m.id} className="border-b border-(--line) last:border-0">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -224,6 +237,35 @@ export default function AdminManga() {
               )}
             </tbody>
           </table>
+
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--line) bg-(--card-2) px-4 py-3 text-sm text-general-400">
+              <div>
+                Menampilkan {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} dari {filtered.length} judul
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="rounded-md border border-(--line) bg-(--card) px-3 py-1.5 text-xs font-medium text-general-200 transition hover:border-primary-500 disabled:opacity-40"
+                >
+                  Sebelumnya
+                </button>
+                <span className="text-xs font-semibold text-general-200">
+                  Hal {page} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="rounded-md border border-(--line) bg-(--card) px-3 py-1.5 text-xs font-medium text-general-200 transition hover:border-primary-500 disabled:opacity-40"
+                >
+                  Selanjutnya
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

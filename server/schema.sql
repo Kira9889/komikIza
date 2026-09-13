@@ -125,3 +125,10 @@ create index if not exists idx_manga_genre on public.manga_genres(genre_id);
 create index if not exists idx_chapter_manga on public.chapters(manga_id);
 create index if not exists idx_likes_user on public.likes(user_id);
 create index if not exists idx_likes_manga on public.likes(manga_id);
+create index if not exists idx_manga_type on public.manga(type);
+create index if not exists idx_manga_created_at on public.manga(created_at desc);
+create index if not exists idx_manga_views on public.manga(views_count desc);
+create index if not exists idx_manga_follows on public.manga(follows_count desc);
+create index if not exists idx_manga_rating on public.manga(rating desc);
+create index if not exists idx_manga_authors_manga on public.manga_authors(manga_id);
+

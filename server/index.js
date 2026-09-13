@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import compression from 'compression'
 import dotenv from 'dotenv'
 import pg from 'pg'
 import bcrypt from 'bcryptjs'
@@ -325,7 +326,31 @@ async function setLinks(mangaId, genreNames, authorNames) {
 // ---------------------------------------------------------------
 const app = express()
 app.use(cors())
+app.use(compression())
 app.use(express.json({ limit: '2mb' }))
+
+// ---------------------------------------------------------------
+// In-Memory Cache untuk performa instan (< 5ms)
+// ---------------------------------------------------------------
+let mangaCache = null
+let mangaCacheTime = 0
+const CACHE_TTL = 3 * 60 * 1000 // 3 menit
+
+async function getCachedMangaList(force = false) {
+  const now = Date.now()
+  if (!force && mangaCache && now - mangaCacheTime < CACHE_TTL) {
+    return mangaCache
+  }
+  const rows = await query(`${MANGA_SELECT} order by m.views_count desc limit 3000`)
+  mangaCache = rows.map(mapManga)
+  mangaCacheTime = Date.now()
+  return mangaCache
+}
+
+function invalidateMangaCache() {
+  mangaCache = null
+  mangaCacheTime = 0
+}
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 
@@ -363,7 +388,9 @@ app.get('/api/shinigami/image', async (req, res) => {
 
 app.post('/api/admin/shinigami/import', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    res.json(await importShinigamiCatalog())
+    const r = await importShinigamiCatalog()
+    invalidateMangaCache()
+    res.json(r)
   } catch (e) {
     console.error(e)
     res.status(502).json({ error: e.message || 'Gagal mengimpor katalog Shinigami' })
@@ -417,34 +444,78 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }))
 
 // ---------------- MANGA (public read) ----------------
+app.get('/api/manga/home', async (_req, res) => {
+  try {
+    const list = await getCachedMangaList()
+    const byCreated = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const byViews = [...list].sort((a, b) => b.views_count - a.views_count)
+    const byFollows = [...list].sort((a, b) => b.follows_count - a.follows_count)
+
+    res.json({
+      updates: byCreated.slice(0, 12),
+      recommendation: {
+        manhwa: list.filter(m => m.type === 'manhwa').slice(0, 6),
+        manga: list.filter(m => m.type === 'manga').slice(0, 6),
+        manhua: list.filter(m => m.type === 'manhua').slice(0, 6),
+      },
+      popular: {
+        daily: byViews.slice(0, 8),
+        weekly: list.slice(0, 8),
+        all: byFollows.slice(0, 8),
+      },
+    })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil data home' })
+  }
+})
+
 app.get('/api/manga', async (req, res) => {
   try {
-    const { type, search, genre, order } = req.query
-    const conds = []
-    const params = []
-    if (type) {
-      params.push(String(type))
-      conds.push(`m.type = $${params.length}`)
+    const { type, search, genre, order, limit, offset } = req.query
+    const all = await getCachedMangaList()
+    let result = all
+
+    if (type && type !== 'semua') {
+      result = result.filter(m => m.type === type)
+    }
+    if (genre && genre !== 'Semua') {
+      const gLower = String(genre).toLowerCase()
+      result = result.filter(m =>
+        (m.genres || []).some(g => g.name.toLowerCase() === gLower) ||
+        (m.tags || []).some(t => String(t).toLowerCase() === gLower)
+      )
     }
     if (search) {
-      params.push(`%${String(search)}%`)
-      const p = params.length
-      conds.push(`(m.title ilike $${p} or m.original_name ilike $${p} or exists (select 1 from unnest(m.alternative_names) alt where alt ilike $${p}))`)
+      const q = String(search).toLowerCase().trim()
+      result = result.filter(m => {
+        return (
+          m.title.toLowerCase().includes(q) ||
+          (m.original_name && m.original_name.toLowerCase().includes(q)) ||
+          (m.alternative_names || []).some(a => String(a).toLowerCase().includes(q))
+        )
+      })
     }
-    if (genre) {
-      params.push(String(genre))
-      conds.push(`exists (select 1 from manga_genres mg join genres g on g.id = mg.genre_id where mg.manga_id = m.id and g.name = $${params.length})`)
+
+    if (order === 'latest') {
+      result = [...result].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    } else if (order === 'follows') {
+      result = [...result].sort((a, b) => b.follows_count - a.follows_count)
+    } else if (order === 'rating') {
+      result = [...result].sort((a, b) => b.rating - a.rating)
+    } else if (order === 'title') {
+      result = [...result].sort((a, b) => a.title.localeCompare(b.title))
+    } else {
+      result = [...result].sort((a, b) => b.views_count - a.views_count)
     }
-    const where = conds.length ? `where ${conds.join(' and ')}` : ''
-    const orderMap = {
-      latest: 'm.created_at desc',
-      views: 'm.views_count desc',
-      follows: 'm.follows_count desc',
-      rating: 'm.rating desc',
+
+    if (limit) {
+      const l = parseInt(String(limit), 10) || 100
+      const o = parseInt(String(offset || 0), 10) || 0
+      result = result.slice(o, o + l)
     }
-    const orderBy = orderMap[order] || orderMap.views
-    const rows = await query(`${MANGA_SELECT} ${where} order by ${orderBy} limit 2000`, params)
-    res.json(rows.map(mapManga))
+
+    res.json(result)
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengambil data' })
@@ -453,6 +524,10 @@ app.get('/api/manga', async (req, res) => {
 
 app.get('/api/manga/:slug', async (req, res) => {
   try {
+    if (mangaCache) {
+      const found = mangaCache.find(m => m.slug === req.params.slug)
+      if (found) return res.json(found)
+    }
     const rows = await query(`${MANGA_SELECT} where m.slug = $1 limit 1`, [req.params.slug])
     if (!rows[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
     res.json(mapManga(rows[0]))
@@ -479,6 +554,7 @@ app.post('/api/manga', requireAuth, requireAdmin, async (req, res) => {
          (b.tags || []).filter(Boolean)],
     )
     await setLinks(rows[0].id, b.genreNames || [], b.authorNames || [])
+    invalidateMangaCache()
     res.json({ id: rows[0].id })
   } catch (e) {
     console.error(e)
@@ -504,6 +580,7 @@ app.put('/api/manga/:id', requireAuth, requireAdmin, async (req, res) => {
          (b.tags || []).filter(Boolean), id],
     )
     await setLinks(id, b.genreNames || [], b.authorNames || [])
+    invalidateMangaCache()
     res.json({ id })
   } catch (e) {
     console.error(e)
@@ -517,6 +594,7 @@ app.delete('/api/manga/:id', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params
     if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
     await query('delete from manga where id = $1', [id])
+    invalidateMangaCache()
     res.status(204).end()
   } catch (e) {
     console.error(e)

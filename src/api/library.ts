@@ -21,22 +21,7 @@ export async function fetchHomeCollections(): Promise<HomeCollections> {
     return mockHomeCollections()
   }
   try {
-    const list = await fetchMangaList()
-    return {
-      updates: [...list]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 12),
-      recommendation: {
-        manhwa: list.filter(m => m.type === 'manhwa').slice(0, 6),
-        manga: list.filter(m => m.type === 'manga').slice(0, 6),
-        manhua: list.filter(m => m.type === 'manhua').slice(0, 6),
-      },
-      popular: {
-        daily: [...list].sort((a, b) => b.views_count - a.views_count).slice(0, 8),
-        weekly: list.slice(0, 8),
-        all: [...list].sort((a, b) => b.follows_count - a.follows_count).slice(0, 8),
-      },
-    }
+    return await apiFetch<HomeCollections>('/manga/home')
   } catch (e) {
     console.error(e)
     return mockHomeCollections()

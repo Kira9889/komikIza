@@ -25,22 +25,50 @@ export default function MangaDetail() {
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [loading, setLoading] = useState(true)
   const [newestFirst, setNewestFirst] = useState(true)
+  const [chaptersLoading, setChaptersLoading] = useState(true)
+  const [chaptersError, setChaptersError] = useState('')
+  const [slowServer, setSlowServer] = useState(false)
   const { isLiked, toggleLike } = useLibrary()
   const { user } = useAuth()
   const navigate = useNavigate()
 
+  const loadChapters = async (mangaId: string) => {
+    setChaptersLoading(true)
+    setChaptersError('')
+    try {
+      const ch = await fetchChapters(mangaId)
+      setChapters(ch)
+    } catch {
+      setChaptersError('Gagal memuat daftar chapter. Server mungkin sedang aktif kembali dari mode tidur.')
+    } finally {
+      setChaptersLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!slug) return
     setLoading(true)
-    Promise.all([fetchMangaBySlug(slug), slug.split('/').length === 1 ? null : null])
-      .then(async ([m]) => {
+    setChaptersLoading(true)
+    setChaptersError('')
+    fetchMangaBySlug(slug)
+      .then(m => {
+        setLoading(false)
         if (!m) return
         setManga(m)
-        const ch = await fetchChapters(m.id)
-        setChapters(ch)
+        void loadChapters(m.id)
       })
-      .finally(() => setLoading(false))
+      .catch(() => setLoading(false))
   }, [slug])
+
+  // Saat cold start (>15 detik) beri tahu user bahwa server sedang dibangunkan.
+  useEffect(() => {
+    if (!chaptersLoading) {
+      setSlowServer(false)
+      return
+    }
+    const t = setTimeout(() => setSlowServer(true), 15000)
+    return () => clearTimeout(t)
+  }, [chaptersLoading])
 
   if (loading) return <DetailSkeleton />
 
@@ -128,7 +156,12 @@ export default function MangaDetail() {
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              {latest ? (
+              {chaptersLoading ? (
+                <span className="flex items-center gap-2 rounded-lg border border-(--line) px-5 py-2.5 text-sm text-general-400">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/15 border-t-primary-500" />
+                  Memuat chapter…
+                </span>
+              ) : latest ? (
                 <Link
                   to={`/manga/${manga.slug}/chapter/${latest.id}`}
                   className="btn-primary flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold"
@@ -190,20 +223,51 @@ export default function MangaDetail() {
             )}
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {orderedChapters.map(ch => (
-              <Link
-                key={ch.id}
-                to={`/manga/${manga.slug}/chapter/${ch.id}`}
-                className="flex items-center justify-between rounded-lg border border-(--line) bg-(--card) px-4 py-3 text-sm transition hover:border-primary-500/40 hover:bg-(--card-2)"
+          {chaptersLoading ? (
+            <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-(--line) bg-(--card) px-4 py-12 text-center">
+              <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-primary-500" />
+              <p className="text-sm font-medium text-general-100">
+                Menghubungkan ke server & memuat data...
+              </p>
+              {slowServer ? (
+                <p className="max-w-sm text-xs leading-relaxed text-general-400">
+                  Server gratis sedang aktif kembali dari mode tidur, bisa memakan waktu ±1 menit.
+                  Mohon tunggu sebentar.
+                </p>
+              ) : (
+                <p className="text-xs text-general-400">Mohon tunggu sebentar.</p>
+              )}
+            </div>
+          ) : chaptersError ? (
+            <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-10 text-center">
+              <p className="text-sm font-medium text-red-300">{chaptersError}</p>
+              <button
+                onClick={() => void loadChapters(manga.id)}
+                className="rounded-lg bg-primary-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
               >
-                <span className="font-medium text-general-100">{ch.name}</span>
-                <span className="text-xs text-general-400">
-                  {formatTimestamp(ch.release_timestamp)}
-                </span>
-              </Link>
-            ))}
-          </div>
+                Coba lagi
+              </button>
+            </div>
+          ) : chapters.length === 0 ? (
+            <p className="mt-4 rounded-xl border border-(--line) bg-(--card) px-4 py-10 text-center text-sm text-general-400">
+              Belum ada chapter untuk judul ini.
+            </p>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {orderedChapters.map(ch => (
+                <Link
+                  key={ch.id}
+                  to={`/manga/${manga.slug}/chapter/${ch.id}`}
+                  className="flex items-center justify-between rounded-lg border border-(--line) bg-(--card) px-4 py-3 text-sm transition hover:border-primary-500/40 hover:bg-(--card-2)"
+                >
+                  <span className="font-medium text-general-100">{ch.name}</span>
+                  <span className="text-xs text-general-400">
+                    {formatTimestamp(ch.release_timestamp)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Info tambahan */}

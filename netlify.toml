@@ -1,0 +1,5 @@
+# Netlify: build Vite + daftarkan folder Scheduled Function.
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"

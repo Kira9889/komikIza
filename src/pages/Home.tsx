@@ -11,9 +11,16 @@ export default function Home() {
   const [recoTab, setRecoTab] = useState('manhwa')
   const [popTab, setPopTab] = useState('daily')
   const [updTab, setUpdTab] = useState('project')
+  // Jam berjalan agar label waktu pengumuman selalu real-time.
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     fetchHomeCollections().then(setData).catch(console.error)
+  }, [])
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(t)
   }, [])
 
   if (!data) return <HomeSkeleton />
@@ -55,12 +62,14 @@ export default function Home() {
               <Link to="#" className="text-sm text-general-400 hover:text-primary-500">Semua</Link>
             </div>
             <div className="space-y-3">
-              <Announcement title="Mode Baca Imersif" time="Baru saja"
-                body="Navbar dan menu bawah kini otomatis sembunyi saat membaca chapter agar tidak menutupi tombol prev/next. Ketuk gambar untuk memunculkannya lagi. Daftar chapter juga bisa diurutkan Terbaru/Terlama." />
-              <Announcement title="Koneksi Lebih Stabil" time="Hari ini"
-                body="Indikator loading baru saat server aktif kembali dari mode tidur, tombol Coba lagi saat gagal memuat, plus penjaga otomatis tiap 4 menit agar database tidak tidur." />
-              <Announcement title="Lebih Ringan & Cepat" time="Hari ini"
-                body="Logo baru IzaLib yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel." />
+              {ANNOUNCEMENTS.map(a => (
+                <Announcement
+                  key={a.title}
+                  title={a.title}
+                  time={timeAgo(a.date, now)}
+                  body={a.body}
+                />
+              ))}
             </div>
           </aside>
         </div>
@@ -131,6 +140,39 @@ export default function Home() {
       </section>
     </div>
   )
+}
+
+// Waktu terbit asli (WIB) tiap pengumuman — label relatif dihitung real-time.
+const ANNOUNCEMENTS: { title: string; date: string; body: string }[] = [
+  {
+    title: 'Mode Baca Imersif',
+    date: '2026-09-14T22:47:35+07:00',
+    body: 'Navbar dan menu bawah kini otomatis sembunyi saat membaca chapter agar tidak menutupi tombol prev/next. Ketuk gambar untuk memunculkannya lagi. Daftar chapter juga bisa diurutkan Terbaru/Terlama.',
+  },
+  {
+    title: 'Koneksi Lebih Stabil',
+    date: '2026-09-14T23:27:03+07:00',
+    body: 'Indikator loading baru saat server aktif kembali dari mode tidur, tombol Coba lagi saat gagal memuat, plus penjaga otomatis tiap 4 menit agar database tidak tidur.',
+  },
+  {
+    title: 'Lebih Ringan & Cepat',
+    date: '2026-09-14T23:35:57+07:00',
+    body: 'Logo baru IzaLib yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
+  },
+]
+
+function timeAgo(iso: string, now: number): string {
+  const diff = Math.max(0, now - new Date(iso).getTime())
+  const minutes = Math.floor(diff / 60_000)
+  if (minutes < 1) return 'Baru saja'
+  if (minutes < 60) return `${minutes} menit lalu`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} jam lalu`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days} hari lalu`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 5) return `${weeks} minggu lalu`
+  return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function Announcement({ title, time, body }: { title: string; time: string; body: string }) {

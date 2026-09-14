@@ -20,6 +20,13 @@ export default function ReadChapter() {
   const [scrolled, setScrolled] = useState(false)
   const [readerControlsOpen, setReaderControlsOpen] = useState(false)
 
+  // Chrome reader (header + navigasi) disembunyikan saat membaca,
+  // muncul lagi saat gambar diketuk.
+  const toggleChrome = () => {
+    setMenuOpen(false)
+    setReaderControlsOpen(o => !o)
+  }
+
   // Header overlay makin solid saat halaman digulir
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -62,9 +69,11 @@ export default function ReadChapter() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0b0b0d] text-white">
-      {/* Navbar sticky transparan di atas konten baca */}
+      {/* Navbar sticky transparan di atas konten baca (geser hilang saat chrome disembunyikan) */}
       <header
-        className={`fixed inset-x-0 top-0 z-40 transition-colors duration-300 ${
+        className={`fixed inset-x-0 top-0 z-40 transition-all duration-300 ${
+          readerControlsOpen ? 'translate-y-0' : '-translate-y-full'
+        } ${
           scrolled
             ? 'border-b border-white/10 bg-[#0b0b0d]/95 backdrop-blur-md'
             : 'border-b border-transparent bg-linear-to-b from-black/70 to-transparent'
@@ -163,18 +172,18 @@ export default function ReadChapter() {
       ) : (
         <>
           {/* Strip vertikal kontinu ala Webtoon */}
-          <div className="pt-14">
+          <div className={readerControlsOpen ? 'pt-14' : 'pt-0'}>
             {current.pages.map((p, i) => (
               <ChapterImage
                 key={`${current.id}-${i}`}
                 src={toDriveImage(p.url)}
                 alt={`${manga.title} ${current.name} hal ${i + 1}`}
                 index={i}
-                onClick={() => setReaderControlsOpen(true)}
+                onClick={toggleChrome}
               />
             ))}
           </div>
-          <EndNav prev={prev} next={next} mangaSlug={manga.slug} />
+          {readerControlsOpen && <EndNav prev={prev} next={next} mangaSlug={manga.slug} />}
         </>
       )}
 

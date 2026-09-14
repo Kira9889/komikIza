@@ -9,6 +9,8 @@ import {
   StarIcon,
   BookmarkIcon,
   BookmarkFilledIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from '../icons'
 
 function formatNumber(n: number) {
@@ -22,6 +24,7 @@ export default function MangaDetail() {
   const [manga, setManga] = useState<Manga | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
   const [loading, setLoading] = useState(true)
+  const [newestFirst, setNewestFirst] = useState(true)
   const { isLiked, toggleLike } = useLibrary()
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -51,6 +54,7 @@ export default function MangaDetail() {
 
   const liked = isLiked(manga.id)
   const latest = chapters[chapters.length - 1]
+  const orderedChapters = newestFirst ? [...chapters].reverse() : chapters
 
   return (
     <div>
@@ -164,13 +168,30 @@ export default function MangaDetail() {
       <div className="mx-auto max-w-6xl px-4">
         {/* Chapter list */}
         <section className="mt-10">
-          <div className="flex items-center gap-2">
-            <h2 className="font-display text-xl font-bold">Daftar Chapter</h2>
-            <span className="text-sm text-general-400">({chapters.length})</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-xl font-bold">Daftar Chapter</h2>
+              <span className="text-sm text-general-400">({chapters.length})</span>
+            </div>
+            {chapters.length > 1 && (
+              <button
+                onClick={() => setNewestFirst(v => !v)}
+                aria-label={newestFirst ? 'Urutkan dari chapter terlama' : 'Urutkan dari chapter terbaru'}
+                title={newestFirst ? 'Terbaru dulu' : 'Terlama dulu'}
+                className="flex items-center gap-1.5 rounded-lg border border-(--line) px-3 py-1.5 text-xs font-semibold text-general-300 transition hover:border-primary-500/50 hover:text-primary-500"
+              >
+                {newestFirst ? (
+                  <ArrowUpIcon className="h-4 w-4" />
+                ) : (
+                  <ArrowDownIcon className="h-4 w-4" />
+                )}
+                {newestFirst ? 'Terbaru' : 'Terlama'}
+              </button>
+            )}
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {[...chapters].reverse().map(ch => (
+            {orderedChapters.map(ch => (
               <Link
                 key={ch.id}
                 to={`/manga/${manga.slug}/chapter/${ch.id}`}

@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -5,18 +6,30 @@ import Home from './pages/Home'
 import Explore from './pages/Explore'
 import Library from './pages/Library'
 import Search from './pages/Search'
-import MangaDetail from './pages/MangaDetail'
-import ReadChapter from './pages/ReadChapter'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import AdminLayout from './pages/admin/AdminLayout'
-import AdminManga from './pages/admin/AdminManga'
-import AdminGenres from './pages/admin/AdminGenres'
-import AdminAuthors from './pages/admin/AdminAuthors'
-import AdminChapters from './pages/admin/AdminChapters'
+
+// Rute berat di-split agar bundle awal ringan: diunduh saat dibuka saja.
+const MangaDetail = lazy(() => import('./pages/MangaDetail'))
+const ReadChapter = lazy(() => import('./pages/ReadChapter'))
+const AdminManga = lazy(() => import('./pages/admin/AdminManga'))
+const AdminGenres = lazy(() => import('./pages/admin/AdminGenres'))
+const AdminAuthors = lazy(() => import('./pages/admin/AdminAuthors'))
+const AdminChapters = lazy(() => import('./pages/admin/AdminChapters'))
+
+function RouteFallback() {
+  return (
+    <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 py-24 text-center">
+      <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-primary-500" />
+      <p className="text-sm text-general-400">Memuat halaman…</p>
+    </div>
+  )
+}
 
 export default function App() {
   return (
+    <Suspense fallback={<RouteFallback />}>
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
@@ -56,5 +69,6 @@ export default function App() {
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>
+    </Suspense>
   )
 }

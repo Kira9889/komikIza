@@ -45,10 +45,12 @@ export default function ReadChapter() {
     fetchMangaBySlug(slug).then(async m => {
       if (!m) return
       setManga(m)
-      const ch = await fetchChapters(m.id)
+      const ch = await fetchChapters(m.id, { slim: true })
       setChapters(ch)
       const selected = ch.find(c => c.id === chapterId) ?? null
-      if (selected?.source === 'shinigami') {
+      // Pages diambil terpisah hanya bila daftar tidak membawanya
+      // (mode slim online). Mode offline/mock membawa pages langsung.
+      if (selected && !selected.pdf_url && selected.pages.length === 0) {
         selected.pages = await fetchShinigamiPages(selected.id)
       }
       setCurrent(selected)

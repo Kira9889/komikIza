@@ -123,6 +123,7 @@ create trigger likes_bump
 
 create index if not exists idx_manga_genre on public.manga_genres(genre_id);
 create index if not exists idx_chapter_manga on public.chapters(manga_id);
+create index if not exists idx_chapters_manga_sort on public.chapters(manga_id, sort_order);
 create index if not exists idx_likes_user on public.likes(user_id);
 create index if not exists idx_likes_manga on public.likes(manga_id);
 create index if not exists idx_manga_type on public.manga(type);

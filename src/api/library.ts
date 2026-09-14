@@ -43,13 +43,24 @@ export async function fetchMangaList(params?: {
   if (params?.search) query.search = params.search
   if (params?.genre) query.genre = params.genre
   if (params?.order) query.order = params.order
+  // Cache baca 2 menit: gonta-ganti filter/genre tidak mengunduh ulang
+  // 1000 judul berkali-kali.
+  const key = JSON.stringify(query)
+  const hit = mangaListCache.get(key)
+  if (hit && Date.now() - hit.at < MANGA_LIST_TTL) return hit.data
   try {
-    return await apiFetch<Manga[]>('/manga', { query })
+    const data = await apiFetch<Manga[]>('/manga', { query })
+    mangaListCache.set(key, { at: Date.now(), data })
+    if (mangaListCache.size > 50) mangaListCache.clear()
+    return data
   } catch (e) {
     console.error(e)
     return mockFilterManga(params)
   }
 }
+
+const mangaListCache = new Map<string, { at: number; data: Manga[] }>()
+const MANGA_LIST_TTL = 2 * 60 * 1000
 
 export async function fetchMangaBySlug(slug: string): Promise<Manga | null> {
   if (!(await isBackendOnline())) {
@@ -65,13 +76,15 @@ export async function fetchMangaBySlug(slug: string): Promise<Manga | null> {
   }
 }
 
-export async function fetchChapters(mangaId: string): Promise<Chapter[]> {
+export async function fetchChapters(mangaId: string, opts?: { slim?: boolean }): Promise<Chapter[]> {
   if (!(await isBackendOnline())) {
     await delay(200)
     return getChaptersCached(mangaId)
   }
   try {
-    return await apiFetch<Chapter[]>(`/manga/${mangaId}/chapters`)
+    return await apiFetch<Chapter[]>(`/manga/${mangaId}/chapters`, {
+      query: opts?.slim ? { slim: '1' } : undefined,
+    })
   } catch (e) {
     console.error(e)
     return getChaptersCached(mangaId)

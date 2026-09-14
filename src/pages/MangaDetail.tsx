@@ -36,7 +36,8 @@ export default function MangaDetail() {
     setChaptersLoading(true)
     setChaptersError('')
     try {
-      const ch = await fetchChapters(mangaId)
+      // Slim: daftar tanpa blob pages (jauh lebih ringan).
+      const ch = await fetchChapters(mangaId, { slim: true })
       setChapters(ch)
     } catch {
       setChaptersError('Gagal memuat daftar chapter. Server mungkin sedang aktif kembali dari mode tidur.')

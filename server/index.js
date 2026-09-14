@@ -744,14 +744,20 @@ app.get('/api/manga/:mangaId/chapters', async (req, res) => {
         console.error(liveError)
       }
     }
+    // ?slim=1: daftar tanpa blob pages (jauh lebih ringan untuk judul
+    // dengan ratusan chapter). Reader/admin yang butuh pages memintanya
+    // terpisah via endpoint pages.
+    const slim = req.query.slim === '1'
     const rows = await query(
-      'select id, manga_id, name, type, sort_order, release_timestamp, pages, pdf_url from chapters where manga_id = $1 order by sort_order asc',
+      slim
+        ? 'select id, manga_id, name, type, sort_order, release_timestamp, pdf_url from chapters where manga_id = $1 order by sort_order asc'
+        : 'select id, manga_id, name, type, sort_order, release_timestamp, pages, pdf_url from chapters where manga_id = $1 order by sort_order asc',
       [mangaId],
     )
     res.json(
       rows.map(r => ({
         ...r,
-        pages: r.pages || [],
+        pages: slim ? [] : r.pages || [],
         pdf_url: r.pdf_url || undefined,
         // Baris lokal milik judul mirror diperlakukan seperti chapter
         // sumber agar reader memuat pages lewat endpoint shinigami

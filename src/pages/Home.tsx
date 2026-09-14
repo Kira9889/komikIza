@@ -55,12 +55,12 @@ export default function Home() {
               <Link to="#" className="text-sm text-general-400 hover:text-primary-500">Semua</Link>
             </div>
             <div className="space-y-3">
-              <Announcement title="Update Sistem" time="2 jam lalu"
-                body="Kami menambahkan fitur library untuk menyimpan komik favoritmu." />
-              <Announcement title="Prototype" time="Hari ini"
-                body="Prototype IzaLib dirilis. Data terhubung ke Neon (Postgres)." />
-              <Announcement title="Maintenance" time="Kemarin"
-                body="Jadwal maintenance mingguan setiap hari Senin 03.00 WIB." />
+              <Announcement title="Mode Baca Imersif" time="Baru saja"
+                body="Navbar dan menu bawah kini otomatis sembunyi saat membaca chapter agar tidak menutupi tombol prev/next. Ketuk gambar untuk memunculkannya lagi. Daftar chapter juga bisa diurutkan Terbaru/Terlama." />
+              <Announcement title="Koneksi Lebih Stabil" time="Hari ini"
+                body="Indikator loading baru saat server aktif kembali dari mode tidur, tombol Coba lagi saat gagal memuat, plus penjaga otomatis tiap 4 menit agar database tidak tidur." />
+              <Announcement title="Lebih Ringan & Cepat" time="Hari ini"
+                body="Logo baru IzaLib yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel." />
             </div>
           </aside>
         </div>

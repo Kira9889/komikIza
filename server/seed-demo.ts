@@ -22,6 +22,21 @@ const pool = new pg.Pool({
 
 const q = async (text: string, params?: unknown[]) => (await pool.query(text, params)).rows
 
+// Pengaman: seed demo (data placeholder) dilarang di database yang sudah
+// berisi data, kecuali dipaksa dengan --force. Pernah kejadian seed demo
+// masuk ke production dan menimbulkan chapter duplikat/gambar placeholder.
+const force = process.argv.includes('--force')
+const existingManga = await q('select count(*)::int as n from manga')
+if (existingManga[0].n > 0 && !force) {
+  console.error(
+    `BATAL: database sudah berisi ${existingManga[0].n} manga. ` +
+    `Seed demo menimpa dengan data placeholder dan menimbulkan duplikat. ` +
+    `Jalankan hanya di database kosong, atau tambah flag --force bila paham risikonya.`,
+  )
+  await pool.end()
+  process.exit(1)
+}
+
 const genreIds: Record<string, string> = {}
 for (const g of genres) {
   const rows = await q(

@@ -237,7 +237,34 @@ async function main() {
         `/v1/chapter/${encodeURIComponent(m.shinigami_id)}/list?page_size=3000`,
       )
       const chapters = mapChapters(m.id, payload).filter(c => isValidUuid(c.id))
-      if (chapters.length) {
+      // Cegah duplikat nama: baris lama yang kosong/placeholder diganti,
+      // yang sudah ada isinya dilewati (kecuali --refresh-pages).
+      const existingRows = await query(`select name, pages from chapters where manga_id = $1`, [m.id])
+      const byName = new Map()
+      for (const r of existingRows) {
+        if (!byName.has(r.name)) byName.set(r.name, [])
+        byName.get(r.name).push(r)
+      }
+      const isReal = pages =>
+        Array.isArray(pages) && pages.length > 0 && !JSON.stringify(pages).includes('placehold.co')
+      const fresh = []
+      let skipped = 0
+      for (const c of chapters) {
+        const olds = byName.get(c.name) || []
+        if (!args['refresh-pages'] && olds.some(r => isReal(r.pages))) {
+          skipped += 1
+          continue
+        }
+        if (olds.length) {
+          await query('delete from chapters where manga_id = $1 and name = $2', [m.id, c.name])
+        }
+        fresh.push(c)
+      }
+      if (skipped) console.log(`  [${m.title}] lewati ${skipped} chapter (sudah ada)`)
+      const chaptersToSync = fresh
+      if (!chaptersToSync.length) {
+        console.log(`OK ${m.title}: 0 baru, ${skipped} sudah ada`)
+      } else {
         await query(
           `insert into chapters (id, manga_id, name, type, sort_order, release_timestamp, pages)
            select id, manga_id, name, type, sort_order, release_timestamp, '[]'::jsonb
@@ -248,23 +275,14 @@ async function main() {
              name = excluded.name,
              sort_order = excluded.sort_order,
              release_timestamp = excluded.release_timestamp`,
-          [JSON.stringify(chapters)],
+          [JSON.stringify(chaptersToSync)],
         )
       }
-      chapterTotal += chapters.length
+      chapterTotal += chaptersToSync.length
 
-      if (!args['skip-pages']) {
-        // Lewati chapter yang pages-nya sudah ada (kecuali --refresh-pages).
-        let hasPages = new Set()
-        if (!args['refresh-pages']) {
-          const existing = await query(
-            `select id from chapters where manga_id = $1 and coalesce(jsonb_array_length(pages), 0) > 0`,
-            [m.id],
-          )
-          hasPages = new Set(existing.map(r => r.id))
-        }
-        for (let i = 0; i < chapters.length; i += workers) {
-          const batch = chapters.slice(i, i + workers).filter(c => !hasPages.has(c.id))
+      if (!args['skip-pages'] && chaptersToSync.length) {
+        for (let i = 0; i < chaptersToSync.length; i += workers) {
+          const batch = chaptersToSync.slice(i, i + workers)
           if (!batch.length) continue
           const results = await Promise.allSettled(
             batch.map(async c => {
@@ -282,12 +300,12 @@ async function main() {
             if (r.status === 'fulfilled') pageTotal += r.value
             else console.error(`  [${m.title}] pages ${batch[bi].name} gagal: ${r.reason?.message || r.reason}`)
           })
-          const done = Math.min(i + workers, chapters.length)
-          if (done % 10 < workers) console.log(`  [${m.title}] ${done}/${chapters.length} chapter...`)
+          const done = Math.min(i + workers, chaptersToSync.length)
+          if (done % 10 < workers) console.log(`  [${m.title}] ${done}/${chaptersToSync.length} chapter...`)
           await delay(200)
         }
       }
-      console.log(`OK ${m.title}: ${chapters.length} chapter`)
+      console.log(`OK ${m.title}: ${chaptersToSync.length} chapter`)
     } catch (e) {
       console.error(`GAGAL ${m.title}: ${e.message}`)
     }

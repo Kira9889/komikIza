@@ -20,11 +20,12 @@ export default function ReadChapter() {
   const [scrolled, setScrolled] = useState(false)
   const [readerControlsOpen, setReaderControlsOpen] = useState(false)
 
-  // Chrome reader (header + navigasi) disembunyikan saat membaca,
-  // muncul lagi saat gambar diketuk.
+  // Chrome reader (header + navigasi + daftar chapter) disembunyikan
+  // saat membaca, muncul lagi saat gambar diketuk.
   const toggleChrome = () => {
-    setMenuOpen(false)
-    setReaderControlsOpen(o => !o)
+    const opening = !readerControlsOpen
+    setReaderControlsOpen(opening)
+    setMenuOpen(opening)
   }
 
   // Header overlay makin solid saat halaman digulir

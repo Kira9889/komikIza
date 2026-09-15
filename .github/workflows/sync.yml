@@ -1,0 +1,29 @@
+# Auto-sync chapter Shinigami terjadwal (tiap 6 jam) + tombol manual.
+# Menulis langsung ke Neon via DATABASE_URL (GitHub Secrets).
+# Catatan: kalau log menunjukkan HTTP 403 massal, berarti IP GitHub ikut
+# diblokir sumber seperti Render — jalankan sync dari laptop saja.
+name: Sync Shinigami
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: node sync-shinigami.mjs --workers=8
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

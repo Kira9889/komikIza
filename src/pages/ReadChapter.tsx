@@ -7,6 +7,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   BookIcon,
+  HomeIcon,
   MenuIcon,
   CloseIcon,
 } from '../icons'
@@ -92,9 +93,16 @@ export default function ReadChapter() {
               {menuOpen ? <CloseIcon className="h-4 w-4" /> : <MenuIcon className="h-4 w-4" />}
             </button>
             <Link
+              to="/"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/15 bg-black/20 text-neutral-300 transition hover:border-primary-500 hover:text-primary-500"
+              aria-label="Kembali ke beranda"
+            >
+              <HomeIcon className="h-4 w-4" />
+            </Link>
+            <Link
               to={`/manga/${manga.slug}`}
               className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/15 bg-black/20 text-neutral-300 transition hover:border-primary-500 hover:text-primary-500"
-              aria-label="Kembali ke bookmark"
+              aria-label="Kembali ke info seri"
             >
               <ArrowLeftIcon className="h-4 w-4" />
             </Link>
@@ -186,7 +194,7 @@ export default function ReadChapter() {
               />
             ))}
           </div>
-          {readerControlsOpen && <EndNav prev={prev} next={next} mangaSlug={manga.slug} />}
+          <EndNav prev={prev} next={next} mangaSlug={manga.slug} />
         </>
       )}
 

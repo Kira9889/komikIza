@@ -40,15 +40,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Library hanya untuk user yang sudah login */}
-        <Route
-          path="/library"
-          element={
-            <ProtectedRoute>
-              <Library />
-            </ProtectedRoute>
-          }
-        />
+        {/* Library: gerbang login chibi + popup ditangani di dalam halaman */}
+        <Route path="/library" element={<Library />} />
 
         {/* Admin hanya untuk role admin */}
         <Route

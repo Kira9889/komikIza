@@ -846,6 +846,64 @@ app.post('/api/me/likes/:mangaId', requireAuth, async (req, res) => {
   }
 })
 
+// ---------------- HISTORY / RIWAYAT BACA ----------------
+app.get('/api/me/history', requireAuth, async (req, res) => {
+  try {
+    const rows = await query(
+      `select h.manga_id, h.chapter_id, h.chapter_name, h.updated_at,
+              m.slug, m.title, m.cover_url
+       from history h join manga m on m.id = h.manga_id
+       where h.user_id = $1 order by h.updated_at desc`,
+      [req.user.id],
+    )
+    res.json(rows)
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil riwayat' })
+  }
+})
+
+app.put('/api/me/history', requireAuth, async (req, res) => {
+  try {
+    const { manga_id, chapter_id, chapter_name } = req.body || {}
+    if (!manga_id || !isValidUuid(manga_id)) return res.status(400).json({ error: 'ID judul tidak valid' })
+    if (chapter_id && !isValidUuid(chapter_id)) return res.status(400).json({ error: 'ID chapter tidak valid' })
+    await query(
+      `insert into history (user_id, manga_id, chapter_id, chapter_name, updated_at)
+       values ($1, $2, $3, $4, now())
+       on conflict (user_id, manga_id) do update set
+         chapter_id = excluded.chapter_id,
+         chapter_name = excluded.chapter_name,
+         updated_at = now()`,
+      [req.user.id, manga_id, chapter_id || null, String(chapter_name || '')],
+    )
+    res.json({ ok: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menyimpan riwayat' })
+  }
+})
+
+app.delete('/api/me/history/:mangaId', requireAuth, async (req, res) => {
+  try {
+    await query('delete from history where user_id = $1 and manga_id = $2', [req.user.id, req.params.mangaId])
+    res.status(204).end()
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menghapus riwayat' })
+  }
+})
+
+app.delete('/api/me/history', requireAuth, async (req, res) => {
+  try {
+    await query('delete from history where user_id = $1', [req.user.id])
+    res.status(204).end()
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menghapus riwayat' })
+  }
+})
+
 // ---------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------

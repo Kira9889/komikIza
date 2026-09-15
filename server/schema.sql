@@ -133,3 +133,17 @@ create index if not exists idx_manga_follows on public.manga(follows_count desc)
 create index if not exists idx_manga_rating on public.manga(rating desc);
 create index if not exists idx_manga_authors_manga on public.manga_authors(manga_id);
 
+-- ------------------------------------------------------------
+-- RIWAYAT BACA — posisi terakhir user per judul (1 baris per user+judul)
+-- ------------------------------------------------------------
+create table if not exists public.history (
+  user_id     uuid not null references public.members(id) on delete cascade,
+  manga_id    uuid not null references public.manga(id) on delete cascade,
+  chapter_id  uuid,
+  chapter_name text not null default '',
+  updated_at  timestamptz not null default now(),
+  primary key (user_id, manga_id)
+);
+
+create index if not exists idx_history_user_updated on public.history(user_id, updated_at desc);
+

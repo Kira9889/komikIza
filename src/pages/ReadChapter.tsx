@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchChapters, fetchMangaBySlug, fetchShinigamiPages } from '../api/library'
+import { useLibrary } from '../context/LibraryContext'
 import type { Manga, Chapter } from '../types'
 import { toDriveImage } from '../lib/drive'
 import {
@@ -20,6 +21,7 @@ export default function ReadChapter() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [readerControlsOpen, setReaderControlsOpen] = useState(false)
+  const { recordHistory } = useLibrary()
 
   // Chrome reader (header + navigasi + daftar chapter) disembunyikan
   // saat membaca, muncul lagi saat gambar diketuk.
@@ -56,6 +58,9 @@ export default function ReadChapter() {
         selected.pages = await fetchShinigamiPages(selected.id)
       }
       setCurrent(selected)
+      if (selected) {
+        recordHistory({ manga_id: m.id, chapter_id: selected.id, chapter_name: selected.name })
+      }
     })
   }, [slug, chapterId])
 

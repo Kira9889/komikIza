@@ -147,3 +147,23 @@ create table if not exists public.history (
 
 create index if not exists idx_history_user_updated on public.history(user_id, updated_at desc);
 
+-- ------------------------------------------------------------
+-- VERIFIKASI EMAIL + LOGIN GOOGLE (Tenshi.id)
+-- Ditambah belakangan; ALTER ... IF NOT EXISTS aman dijalankan
+-- ulang saat server start (ensureSchema).
+-- ------------------------------------------------------------
+-- Pengguna Google-only tidak punya password, jadi kolomnya nullable.
+alter table public.members alter column password_hash drop not null;
+alter table public.members add column if not exists email_verified boolean not null default false;
+alter table public.members add column if not exists google_sub text;
+create unique index if not exists idx_members_google_sub on public.members(google_sub) where google_sub is not null;
+
+-- Kode verifikasi 6 digit (disimpan sebagai hash bcrypt, 1 baris per email).
+create table if not exists public.email_verification_codes (
+  email      text primary key,
+  code_hash  text not null,
+  expires_at timestamptz not null,
+  attempts   int not null default 0,
+  created_at timestamptz not null default now()
+);
+

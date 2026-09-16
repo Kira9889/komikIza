@@ -35,7 +35,7 @@ export default function Home() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <a
             href="#"
-            className="relative block aspect-square overflow-hidden rounded-xl border border-(--line) bg-(--card) lg:col-span-2 lg:aspect-16/5"
+            className="relative block aspect-16/10 overflow-hidden rounded-xl border border-(--line) bg-(--card) sm:aspect-16/7 lg:col-span-2 lg:aspect-16/5"
           >
             <img
               src="https://placehold.co/1200x400/1a1a2e/6f39ee?text=Selamat+Datang+di+Tenshi.id"
@@ -43,14 +43,14 @@ export default function Home() {
               className="h-full w-full object-cover"
             />
             <div className="absolute inset-0 bg-linear-to-r from-black/70 to-transparent" />
-            <div className="absolute inset-0 flex flex-col justify-center p-6 md:p-10">
-              <span className="mb-2 w-fit rounded bg-primary-500 px-2 py-0.5 text-xs font-bold uppercase text-white">
+            <div className="absolute inset-0 flex flex-col justify-center p-5 sm:p-6 md:p-10">
+              <span className="mb-1.5 w-fit rounded bg-primary-500 px-2 py-0.5 text-[11px] font-bold uppercase text-white sm:mb-2 sm:text-xs">
                 Terbaru
               </span>
-              <h1 className="max-w-md font-display text-2xl font-extrabold text-white md:text-4xl">
+              <h1 className="max-w-md font-display text-xl font-extrabold leading-tight text-white sm:text-2xl md:text-4xl">
                 Manga Library Digital Favoritmu
               </h1>
-              <p className="mt-2 max-w-sm text-sm text-white/80">
+              <p className="mt-1.5 line-clamp-2 max-w-sm text-xs leading-relaxed text-white/80 sm:mt-2 sm:text-sm">
                 Baca manhwa, manga, dan manhua favorit secara gratis. Update setiap hari.
               </p>
             </div>

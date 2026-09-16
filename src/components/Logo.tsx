@@ -22,7 +22,7 @@ export default function Logo({ size = 36, className = '' }: LogoProps) {
 
   return (
     <img
-      src="/logo.png"
+      src="/logo.jpg"
       alt="Tenshi.id"
       width={size}
       height={size}

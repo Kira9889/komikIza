@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { CloseIcon } from '../../icons'
 
@@ -70,6 +71,7 @@ const inputCls = 'input-manga'
 
 function LoginForm({ onDone }: { onDone: () => void }) {
   const { login } = useAuth()
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -82,6 +84,12 @@ function LoginForm({ onDone }: { onDone: () => void }) {
     const res = await login({ email, password })
     setBusy(false)
     if (res.error) {
+      // Belum verifikasi → tutup modal, lanjut ke halaman kode.
+      if (res.needsVerification) {
+        onDone()
+        navigate('/verify-email', { state: { email: res.email ?? email } })
+        return
+      }
       setError(res.error)
       return
     }
@@ -131,6 +139,7 @@ function LoginForm({ onDone }: { onDone: () => void }) {
 
 function RegisterForm({ onDone }: { onDone: () => void }) {
   const { register } = useAuth()
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -152,12 +161,18 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
       setError(res.error)
       return
     }
+    // Akun baru wajib verifikasi kode → tutup modal, lanjut ke halaman kode.
+    if (res.needsVerification) {
+      onDone()
+      navigate('/verify-email', { state: { email: res.email ?? email } })
+      return
+    }
     onDone()
   }
 
   return (
     <form onSubmit={submit} className="mt-5 space-y-4">
-      <h2 className="font-display text-xl font-extrabold">Buat akun untuk mulai membaca.</h2>
+      <h2 className="font-display text-xl font-extrabold">Buat akun untuk menyimpan bookmark.</h2>
       <ErrorBox message={error} />
       <div>
         <label className="mb-1 block text-sm font-medium text-general-300" htmlFor="modal-username">
@@ -175,15 +190,16 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         <label className="mb-1 block text-sm font-medium text-general-300" htmlFor="modal-reg-email">
           Email
         </label>
-        <input
-          id="modal-reg-email"
-          type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          placeholder="kamu@email.com"
-          className={inputCls}
-        />
-      </div>
+          <input
+            id="modal-reg-email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="kamu@gmail.com"
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-general-400">Khusus @gmail.com — kode verifikasi dikirim ke sana.</p>
+        </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="mb-1 block text-sm font-medium text-general-300" htmlFor="modal-reg-pass">

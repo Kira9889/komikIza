@@ -72,6 +72,7 @@ export interface User {
   username: string
   email: string
   role: UserRole
+  email_verified?: boolean
 }
 
 // ----------------------------------------------------------------

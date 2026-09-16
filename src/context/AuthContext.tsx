@@ -5,15 +5,29 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import { apiFetch, setToken, isBackendOnline } from '../lib/api'
+import { apiFetch, setToken, isBackendOnline, isServerDownError } from '../lib/api'
 import type { User } from '../types'
+
+export interface AuthResult {
+  error?: string
+  needsVerification?: boolean
+  email?: string
+}
 
 interface AuthContextValue {
   user: User | null
   loading: boolean
-  register: (data: { username: string; email: string; password: string }) => Promise<{ error?: string }>
-  login: (data: { email: string; password: string }) => Promise<{ error?: string }>
+  register: (data: { username: string; email: string; password: string }) => Promise<AuthResult>
+  login: (data: { email: string; password: string }) => Promise<AuthResult>
+  loginWithGoogle: (code: string) => Promise<AuthResult>
+  verifyEmail: (data: { email: string; code: string }) => Promise<AuthResult>
+  resendCode: (email: string) => Promise<AuthResult>
+  updateUsername: (username: string) => Promise<AuthResult>
   logout: () => Promise<void>
+}
+
+export function isGmailAddress(email: string) {
+  return /^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(email.trim())
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -88,34 +102,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     username: string
     email: string
     password: string
-  }): Promise<{ error?: string }> => {
+  }): Promise<AuthResult> => {
     if (!email || !password || !username) return { error: 'Semua field wajib diisi' }
+    if (!isGmailAddress(email)) return { error: 'Pendaftaran hanya untuk email @gmail.com' }
     if (password.length < 6) return { error: 'Password minimal 6 karakter' }
 
-    if (await isBackendOnline()) {
+    let online = await isBackendOnline()
+    if (online) {
       try {
-        const res = await apiFetch<AuthResponse>('/auth/register', {
+        const res = await apiFetch<AuthResponse & { needsVerification?: boolean; email?: string }>('/auth/register', {
           method: 'POST',
           body: JSON.stringify({ username, email, password }),
         })
-        setToken(res.token)
-        persist(res.user)
+        // Akun baru wajib verifikasi kode dulu sebelum dapat token.
+        if (res.needsVerification) return { needsVerification: true, email: res.email ?? email }
+        if (res.token) setToken(res.token)
+        if (res.user) persist(res.user)
         return {}
       } catch (e: any) {
-        return { error: e.message || 'Gagal mendaftar' }
+        // Backend mati di tengah jalan (502 / koneksi putus) → jatuh ke
+        // error ramah di bawah, JANGAN tampilkan 502 ke user.
+        if (!isServerDownError(e)) return { error: e.message || 'Gagal mendaftar' }
+        online = false
       }
     }
-
-    // Mock auth (backend offline)
-    const users = getRegistered()
-    if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-      return { error: 'Email sudah terdaftar' }
+    if (!online) {
+      // Lokal pun wajib lewat backend agar alur verifikasi bisa dicoba
+      // sebelum deploy. Jangan bikin sesi mock di sini.
+      return { error: 'Gagal mendaftar. Coba lagi.' }
     }
-    const newUser: StoredUser = { id: `u-${Date.now()}`, username, email, role: 'user', password }
-    users.push(newUser)
-    saveRegistered(users)
-    persist(newUser)
-    return {}
+    return { error: 'Gagal mendaftar. Coba lagi.' }
   }
 
   const login = async ({
@@ -124,10 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }: {
     email: string
     password: string
-  }): Promise<{ error?: string }> => {
+  }): Promise<AuthResult> => {
     if (!email || !password) return { error: 'Email dan password wajib diisi' }
 
-    if (await isBackendOnline()) {
+    let online = await isBackendOnline()
+    if (online) {
       try {
         const res = await apiFetch<AuthResponse>('/auth/login', {
           method: 'POST',
@@ -137,13 +154,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         persist(res.user)
         return {}
       } catch (e: any) {
-        return { error: e.message || 'Email atau password salah' }
+        if (e.data?.needsVerification) {
+          return { error: e.message, needsVerification: true, email: e.data.email ?? email }
+        }
+        // Backend mati di tengah jalan (502 / koneksi putus) → diam-diam pakai
+        // mock offline di bawah, JANGAN tampilkan 502 ke user.
+        if (!isServerDownError(e)) return { error: e.message || 'Email atau password salah' }
+        online = false
       }
     }
 
-    // Mock auth (hanya saat backend offline) — termasuk akun admin demo
-    // Terima email lama (izalib) + baru (tenshi.id) agar akun lama tetap bisa login.
-    if ((email === 'admin@tenshi.id' || email === 'admin@izalib.test') && password === 'admin123') {
+    if (!online) {
+    // Mock auth (hanya saat backend offline) — termasuk akun admin demo.
+    // DEV-only: Vite membuang blok ini dari production build,
+    // jadi kredensial demo tidak masuk bundle publik. Di dev tetap bisa dipakai.
+    if (
+      import.meta.env.DEV &&
+      (email === 'admin@tenshi.id' || email === 'admin@izalib.test') &&
+      password === 'admin123'
+    ) {
       persist({ id: 'admin', username: 'admin', email, role: 'admin' })
       return {}
     }
@@ -153,6 +182,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (found.password !== password) return { error: 'Email atau password salah' }
     persist(found)
     return {}
+    }
+    return { error: 'Server tidak merespons. Coba lagi sebentar lagi.' }
+  }
+
+  const loginWithGoogle = async (code: string): Promise<AuthResult> => {
+    if (!code) return { error: 'Kode Google tidak ada.' }
+    try {
+      const res = await apiFetch<AuthResponse>('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      })
+      setToken(res.token)
+      persist(res.user)
+      return {}
+    } catch (e: any) {
+      return { error: e.message || 'Login Google gagal. Coba lagi.' }
+    }
+  }
+
+  const verifyEmail = async ({ email, code }: { email: string; code: string }): Promise<AuthResult> => {
+    if (!email || !code) return { error: 'Email dan kode wajib diisi' }
+    try {
+      const res = await apiFetch<AuthResponse>('/auth/verify-email', {
+        method: 'POST',
+        body: JSON.stringify({ email, code }),
+      })
+      setToken(res.token)
+      persist(res.user)
+      return {}
+    } catch (e: any) {
+      return { error: e.message || 'Gagal verifikasi' }
+    }
+  }
+
+  const resendCode = async (email: string): Promise<AuthResult> => {
+    if (!email) return { error: 'Email wajib diisi' }
+    try {
+      await apiFetch('/auth/resend-code', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      })
+      return {}
+    } catch (e: any) {
+      return { error: e.message || 'Gagal mengirim kode' }
+    }
+  }
+
+  const updateUsername = async (username: string): Promise<AuthResult> => {
+    const name = username.trim()
+    if (name.length < 3) return { error: 'Username minimal 3 karakter' }
+    if (name.length > 24) return { error: 'Username maksimal 24 karakter' }
+    if (!user) return { error: 'Harus login' }
+    if (name === user.username) return {}
+    try {
+      const res = await apiFetch<{ user: User }>('/me/username', {
+        method: 'PUT',
+        body: JSON.stringify({ username: name }),
+      })
+      persist(res.user)
+      return {}
+    } catch (e: any) {
+      if (isServerDownError(e)) {
+        // Backend offline: perbarui sesi lokal + daftar mock bila ada.
+        const users = getRegistered().map(u =>
+          u.id === user.id ? { ...u, username: name } : u,
+        )
+        saveRegistered(users)
+        persist({ ...user, username: name })
+        return {}
+      }
+      return { error: e.message || 'Gagal memperbarui username' }
+    }
   }
 
   const logout = async () => {
@@ -161,7 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, register, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, register, login, loginWithGoogle, verifyEmail, resendCode, updateUsername, logout }}>
       {children}
     </AuthContext.Provider>
   )
@@ -176,6 +277,10 @@ export function useAuth() {
 
 interface StoredUser extends User {
   password: string
+}
+
+function saveRegistered(users: StoredUser[]) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users))
 }
 
 function getRegistered(): StoredUser[] {
@@ -195,6 +300,3 @@ function getRegistered(): StoredUser[] {
   }
 }
 
-function saveRegistered(users: StoredUser[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users))
-}

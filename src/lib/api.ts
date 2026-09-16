@@ -26,6 +26,24 @@ export function getApiBase() {
   return API_BASE
 }
 
+// Pesan ramah untuk "backend tidak merespons" (pengganti "HTTP 502" / "Failed to fetch").
+export const SERVER_DOWN_MESSAGE = 'Server tidak merespons. Coba lagi sebentar lagi.'
+
+// True jika error artinya backend mati / tak terjangkau (bukan salah input user).
+// Error jenis ini boleh jatuh ke mode offline (mock), bukan ditampilkan sebagai 502.
+export function isServerDownError(e: any): boolean {
+  if (!e) return false
+  if (e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504) return true
+  const msg = String(e.message || '')
+  return (
+    msg === 'Failed to fetch' ||
+    msg === 'Load failed' ||
+    msg === 'Network request failed' ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('ECONNRESET')
+  )
+}
+
 export interface ApiOptions {
   query?: Record<string, string>
   headers?: Record<string, string>
@@ -48,17 +66,37 @@ export async function apiFetch<T = any>(
     if (qs) url += (url.includes('?') ? '&' : '?') + qs
   }
 
-  const res = await fetch(url, { ...options, headers })
+  let res: Response
+  try {
+    res = await fetch(url, { ...options, headers })
+  } catch {
+    // Backend mati total (mis. dev server belum nyala / ECONNREFUSED).
+    // Jangan lempar "Failed to fetch" mentah — anggap offline saja.
+    resetOnlineCache()
+    const err: any = new Error(SERVER_DOWN_MESSAGE)
+    err.status = 0
+    err.data = null
+    throw err
+  }
   if (!res.ok) {
     let message = `HTTP ${res.status}`
+    let data: any = null
     try {
-      const body = await res.json()
-      if (body && body.error) message = body.error
+      data = await res.json()
+      if (data && data.error) message = data.error
     } catch {
       /* ignore */
     }
+    // 502/503/504 = backend/proxy mati, BUKAN salah user.
+    // Jangan tampilkan "HTTP 502" — pakai pesan ramah + reset cache online
+    // agar pengecekan berikutnya sadar backend sedang mati.
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      resetOnlineCache()
+      message = SERVER_DOWN_MESSAGE
+    }
     const err: any = new Error(message)
     err.status = res.status
+    err.data = data
     throw err
   }
   if (res.status === 204) return undefined as T

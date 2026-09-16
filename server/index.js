@@ -5,6 +5,9 @@ import dotenv from 'dotenv'
 import pg from 'pg'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import { OAuth2Client } from 'google-auth-library'
+import nodemailer from 'nodemailer'
+import { randomInt } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -48,11 +51,14 @@ async function ensureSchema() {
   await pool.query(sql)
   const hash = await bcrypt.hash('admin123', 10)
   await query(
-    `insert into members (email, username, password_hash, role)
-     values ('admin@tenshi.id', 'admin', $1, 'admin')
+    `insert into members (email, username, password_hash, role, email_verified)
+     values ('admin@tenshi.id', 'admin', $1, 'admin', true)
      on conflict (email) do nothing`,
     [hash],
   )
+  // Akun lama yang sudah ada sebelum era verifikasi dianggap terverifikasi.
+  await query(`update members set email_verified = true where email = 'admin@tenshi.id'`)
+  await query(`update members set email_verified = true where email = 'admin@izalib.test'`)
 }
 
 // ---------------------------------------------------------------
@@ -63,7 +69,93 @@ function signToken(row) {
 }
 
 function publicUser(row) {
-  return { id: row.id, email: row.email, username: row.username, role: row.role }
+  return {
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    role: row.role,
+    email_verified: !!row.email_verified,
+  }
+}
+
+// ---------------------------------------------------------------
+// Verifikasi Gmail (khusus @gmail.com / @googlemail.com)
+// ---------------------------------------------------------------
+// Pendaftaran hanya untuk email Gmail asli. Kepemilikan alamat
+// dibuktikan via kode 6 digit (SMTP) atau Login with Google.
+function isGmail(email) {
+  return /^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(String(email || '').trim())
+}
+
+const CODE_TTL_MS = 10 * 60 * 1000 // kode berlaku 10 menit
+const CODE_MAX_ATTEMPTS = 5
+const RESEND_COOLDOWN_MS = 60 * 1000 // kirim ulang tiap 60 detik
+
+let mailer = null
+function getMailer() {
+  if (mailer) return mailer
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null
+  mailer = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT || 465),
+    secure: Number(SMTP_PORT || 465) === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  })
+  return mailer
+}
+
+async function createAndSendCode(email) {
+  const code = String(randomInt(100000, 1000000))
+  const codeHash = await bcrypt.hash(code, 10)
+  const expiresAt = new Date(Date.now() + CODE_TTL_MS).toISOString()
+  await query(
+    `insert into email_verification_codes (email, code_hash, expires_at, attempts)
+     values ($1, $2, $3, 0)
+     on conflict (email) do update set
+       code_hash = excluded.code_hash,
+       expires_at = excluded.expires_at,
+       attempts = 0,
+       created_at = now()`,
+    [email, codeHash, expiresAt],
+  )
+
+  const mail = getMailer()
+  if (mail) {
+    const from = process.env.SMTP_FROM || process.env.SMTP_USER
+    await mail.sendMail({
+      from: `"Tenshi.id" <${from}>`,
+      to: email,
+      subject: `Kode verifikasi Tenshi.id: ${code}`,
+      text: `Halo!\n\nKode verifikasi Tenshi.id kamu: ${code}\nBerlaku 10 menit. Jangan bagikan ke siapa pun.\n\nKalau kamu tidak merasa mendaftar, abaikan email ini.`,
+      html: `<div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #eee;border-radius:12px">
+        <h2 style="margin:0 0 8px">Tenshi<span style="color:#6f39ee">.id</span></h2>
+        <p>Kode verifikasi kamu:</p>
+        <p style="font-size:32px;font-weight:800;letter-spacing:8px;margin:8px 0">${code}</p>
+        <p style="color:#888;font-size:13px">Berlaku 10 menit. Jangan bagikan ke siapa pun.</p>
+      </div>`,
+    })
+    return { sent: true }
+  }
+
+  // SMTP belum dikonfigurasi (mode dev): tampilkan di log agar tetap bisa diuji.
+  console.log(`[verifikasi] SMTP belum diset — kode untuk ${email}: ${code}`)
+  const devCode = process.env.NODE_ENV === 'production' ? undefined : code
+  return { sent: false, devCode }
+}
+
+// ---------------------------------------------------------------
+// Google OAuth (Login with Google)
+// Redirect URI = halaman callback frontend (lihat GOOGLE_REDIRECT_URI).
+// ---------------------------------------------------------------
+function getGoogleClient() {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) return null
+  return new OAuth2Client(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI || 'https://tenshi.my.id/auth/google/callback',
+  )
 }
 
 async function loadUserByToken(req) {
@@ -461,30 +553,108 @@ app.post('/api/admin/shinigami/import', requireAuth, requireAdmin, async (_req, 
 })
 
 // ---------------- AUTH ----------------
+// Pendaftaran khusus Gmail: buat akun (belum aktif) lalu kirim kode verifikasi.
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, username, password } = req.body || {}
     if (!email || !username || !password) return res.status(400).json({ error: 'Semua field wajib diisi' })
+    const mail = String(email).toLowerCase().trim()
+    if (!isGmail(mail)) return res.status(400).json({ error: 'Pendaftaran hanya untuk email @gmail.com' })
     if (String(password).length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email))) return res.status(400).json({ error: 'Email tidak valid' })
+    if (String(username).trim().length < 3) return res.status(400).json({ error: 'Username minimal 3 karakter' })
+
+    const existing = (await query('select * from members where email = $1', [mail]))[0]
+    if (existing && existing.email_verified) {
+      return res.status(400).json({ error: 'Email sudah terdaftar. Silakan masuk.' })
+    }
     const hash = await bcrypt.hash(String(password), 10)
-    const rows = await query(
-      `insert into members (email, username, password_hash) values ($1, $2, $3)
-       returning id, email, username, role`,
-      [String(email).toLowerCase(), username, hash],
-    ).catch(e => {
-      if (String(e.code) === '23505') {
-        const err = new Error('Email sudah terdaftar')
-        err.status = 400
-        throw err
-      }
-      throw e
-    })
-    const row = rows[0]
-    res.json({ token: signToken(row), user: publicUser(row) })
+    if (existing) {
+      await query('update members set username = $1, password_hash = $2 where email = $3', [
+        String(username).trim(),
+        hash,
+        mail,
+      ])
+    } else {
+      await query(
+        `insert into members (email, username, password_hash, email_verified) values ($1, $2, $3, false)`,
+        [mail, String(username).trim(), hash],
+      ).catch(e => {
+        if (String(e.code) === '23505') {
+          const err = new Error('Email sudah terdaftar. Silakan masuk.')
+          err.status = 400
+          throw err
+        }
+        throw e
+      })
+    }
+    const result = await createAndSendCode(mail)
+    res.json({ needsVerification: true, email: mail, emailSent: result.sent, devCode: result.devCode })
   } catch (e) {
     console.error(e)
     res.status(e.status || 500).json({ error: e.message || 'Gagal mendaftar' })
+  }
+})
+
+// Verifikasi kode 6 digit → akun aktif + langsung login (dapat token).
+app.post('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { email, code } = req.body || {}
+    if (!email || !code) return res.status(400).json({ error: 'Email dan kode wajib diisi' })
+    const mail = String(email).toLowerCase().trim()
+    const row = (await query('select * from email_verification_codes where email = $1', [mail]))[0]
+    if (!row) return res.status(400).json({ error: 'Kode tidak ditemukan. Minta kode baru.', needsCode: true })
+    if (new Date(row.expires_at).getTime() < Date.now()) {
+      await query('delete from email_verification_codes where email = $1', [mail])
+      return res.status(400).json({ error: 'Kode kedaluwarsa. Minta kode baru.', needsCode: true })
+    }
+    if (Number(row.attempts) >= CODE_MAX_ATTEMPTS) {
+      await query('delete from email_verification_codes where email = $1', [mail])
+      return res.status(429).json({ error: 'Terlalu banyak percobaan. Minta kode baru.', needsCode: true })
+    }
+    const ok = await bcrypt.compare(String(code).trim(), row.code_hash)
+    if (!ok) {
+      await query('update email_verification_codes set attempts = attempts + 1 where email = $1', [mail])
+      return res.status(401).json({ error: 'Kode salah. Periksa lagi 6 digitnya.' })
+    }
+    await query('delete from email_verification_codes where email = $1', [mail])
+    const users = await query(
+      `update members set email_verified = true where email = $1
+       returning id, email, username, role, email_verified`,
+      [mail],
+    )
+    const user = users[0]
+    if (!user) return res.status(404).json({ error: 'Akun tidak ditemukan. Daftar ulang.' })
+    res.json({ token: signToken(user), user: publicUser(user) })
+  } catch (e) {
+    console.error(e)
+    res.status(e.status || 500).json({ error: e.message || 'Gagal verifikasi' })
+  }
+})
+
+// Kirim ulang kode (ada jeda 60 detik anti-spam).
+app.post('/api/auth/resend-code', async (req, res) => {
+  try {
+    const { email } = req.body || {}
+    if (!email) return res.status(400).json({ error: 'Email wajib diisi' })
+    const mail = String(email).toLowerCase().trim()
+    if (!isGmail(mail)) return res.status(400).json({ error: 'Pendaftaran hanya untuk email @gmail.com' })
+    const member = (await query('select * from members where email = $1', [mail]))[0]
+    if (!member) return res.status(404).json({ error: 'Email belum terdaftar. Daftar dulu.' })
+    if (member.email_verified) return res.status(400).json({ error: 'Email sudah terverifikasi. Silakan masuk.' })
+    const last = (await query('select * from email_verification_codes where email = $1', [mail]))[0]
+    if (last) {
+      const waitMs = new Date(last.created_at).getTime() + RESEND_COOLDOWN_MS - Date.now()
+      if (waitMs > 0) {
+        const err = new Error(`Tunggu ${Math.ceil(waitMs / 1000)} detik sebelum minta kode baru.`)
+        err.status = 429
+        throw err
+      }
+    }
+    const result = await createAndSendCode(mail)
+    res.json({ ok: true, email: mail, emailSent: result.sent, devCode: result.devCode })
+  } catch (e) {
+    console.error(e)
+    res.status(e.status || 500).json({ error: e.message || 'Gagal mengirim kode' })
   }
 })
 
@@ -492,11 +662,17 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body || {}
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' })
-    const rows = await query('select * from members where email = $1', [String(email).toLowerCase()])
+    const rows = await query('select * from members where email = $1', [String(email).toLowerCase().trim()])
     const row = rows[0]
     if (!row) return res.status(401).json({ error: 'Email atau password salah' })
+    if (!row.password_hash) {
+      return res.status(401).json({ error: 'Akun ini memakai Login with Google. Gunakan tombol Google.' })
+    }
     const ok = await bcrypt.compare(String(password), row.password_hash)
     if (!ok) return res.status(401).json({ error: 'Email atau password salah' })
+    if (!row.email_verified) {
+      return res.status(403).json({ error: 'Email belum diverifikasi. Cek kode di Gmail kamu.', needsVerification: true, email: row.email })
+    }
     res.json({ token: signToken(row), user: publicUser(row) })
   } catch (e) {
     console.error(e)
@@ -504,7 +680,88 @@ app.post('/api/auth/login', async (req, res) => {
   }
 })
 
+// URL login Google (frontend redirect ke sini hasilnya).
+app.get('/api/auth/google/url', (req, res) => {
+  const client = getGoogleClient()
+  if (!client) return res.status(500).json({ error: 'Login Google belum dikonfigurasi di server.' })
+  const url = client.generateAuthUrl({
+    access_type: 'online',
+    scope: ['openid', 'email', 'profile'],
+    prompt: 'select_account',
+  })
+  res.json({ url })
+})
+
+// Callback: tukar code Google → verifikasi → buat/tautkan akun → token JWT.
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const client = getGoogleClient()
+    if (!client) return res.status(500).json({ error: 'Login Google belum dikonfigurasi di server.' })
+    const { code } = req.body || {}
+    if (!code) return res.status(400).json({ error: 'Kode Google tidak ada.' })
+
+    const { tokens } = await client.getToken(String(code))
+    if (!tokens.id_token) return res.status(401).json({ error: 'Token Google tidak valid.' })
+    const ticket = await client.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    })
+    const payload = ticket.getPayload() || {}
+    if (!payload.email_verified) return res.status(401).json({ error: 'Email Google belum terverifikasi.' })
+    const mail = String(payload.email || '').toLowerCase().trim()
+    if (!isGmail(mail)) return res.status(403).json({ error: 'Hanya akun @gmail.com yang bisa masuk.' })
+    const sub = String(payload.sub || '')
+    if (!sub) return res.status(401).json({ error: 'Akun Google tidak valid.' })
+
+    let row = (await query('select * from members where google_sub = $1', [sub]))[0]
+    if (!row) {
+      const byEmail = (await query('select * from members where email = $1', [mail]))[0]
+      if (byEmail) {
+        // Tautkan akun lama (daftar via password) ke Google.
+        row = (await query(
+          `update members set google_sub = $1, email_verified = true where email = $2
+           returning id, email, username, role, email_verified`,
+          [sub, mail],
+        ))[0]
+      } else {
+        // Akun baru dari Google: username dari nama/email, unik otomatis.
+        const base = String(payload.name || mail.split('@')[0]).trim().slice(0, 24) || 'user'
+        const uname = `${base}-${sub.slice(-4)}`.toLowerCase().replace(/[^a-z0-9._-]/g, '') || `user-${sub.slice(-4)}`
+        row = (await query(
+          `insert into members (email, username, password_hash, role, email_verified, google_sub)
+           values ($1, $2, null, 'user', true, $3)
+           returning id, email, username, role, email_verified`,
+          [mail, uname, sub],
+        ))[0]
+      }
+    }
+    res.json({ token: signToken(row), user: publicUser(row) })
+  } catch (e) {
+    console.error(e)
+    res.status(401).json({ error: 'Login Google gagal. Coba lagi.' })
+  }
+})
+
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ user: publicUser(req.user) }))
+
+// Ganti username sendiri (login wajib).
+app.put('/api/me/username', requireAuth, async (req, res) => {
+  try {
+    const username = String((req.body || {}).username || '').trim()
+    if (username.length < 3) return res.status(400).json({ error: 'Username minimal 3 karakter' })
+    if (username.length > 24) return res.status(400).json({ error: 'Username maksimal 24 karakter' })
+    const rows = await query(
+      `update members set username = $1 where id = $2
+       returning id, email, username, role, email_verified`,
+      [username, req.user.id],
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Akun tidak ditemukan' })
+    res.json({ user: publicUser(rows[0]) })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal memperbarui username' })
+  }
+})
 
 // ---------------- MANGA (public read) ----------------
 app.get('/api/manga/home', async (_req, res) => {

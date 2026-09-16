@@ -22,11 +22,17 @@ export default function Library() {
     let cancelled = false
     ;(async () => {
       const online = await isBackendOnline()
-      // saat backend online, ambil data manga sungguhan dari database
+      // saat backend online, ambil data manga sungguhan dari database.
+      // try/catch: backend bisa mati di tengah jalan (502) — jatuh ke seed,
+      // JANGAN lempar error ke user.
       if (online) {
-        const list = await fetchMangaList()
-        if (!cancelled) setMangas(list)
-        return
+        try {
+          const list = await fetchMangaList()
+          if (!cancelled) setMangas(list)
+          return
+        } catch {
+          /* backend mati mendadak → pakai seed di bawah */
+        }
       }
       if (!cancelled) setMangas(seedManga)
     })()

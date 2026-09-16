@@ -8,6 +8,8 @@ import Library from './pages/Library'
 import Search from './pages/Search'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
+import GoogleCallback from './pages/GoogleCallback'
 import AdminLayout from './pages/admin/AdminLayout'
 
 // Rute berat di-split agar bundle awal ringan: diunduh saat dibuka saja.
@@ -39,6 +41,8 @@ export default function App() {
         <Route path="/manga/:slug/chapter/:chapterId" element={<ReadChapter />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/auth/google/callback" element={<GoogleCallback />} />
 
         {/* Library: gerbang login chibi + popup ditangani di dalam halaman */}
         <Route path="/library" element={<Library />} />

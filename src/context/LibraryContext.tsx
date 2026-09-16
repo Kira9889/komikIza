@@ -31,9 +31,22 @@ interface LibraryContextValue {
 
 const LibraryContext = createContext<LibraryContextValue | null>(null)
 
+function legacyKey(key: string): string {
+  return key.replace(/^tenshi_/, 'izalib_')
+}
+
 function loadLocal(key: string): string[] {
   try {
-    return JSON.parse(localStorage.getItem(key) ?? '[]') as string[]
+    const current = localStorage.getItem(key)
+    if (current) return JSON.parse(current) as string[]
+    // Migrasi sekali dari key lama IzaLib
+    const legacy = localStorage.getItem(legacyKey(key))
+    if (legacy) {
+      localStorage.setItem(key, legacy)
+      localStorage.removeItem(legacyKey(key))
+      return JSON.parse(legacy) as string[]
+    }
+    return []
   } catch {
     return []
   }
@@ -41,8 +54,20 @@ function loadLocal(key: string): string[] {
 
 function loadLocalHistory(key: string): HistoryEntry[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(key) ?? '[]') as HistoryEntry[]
-    return Array.isArray(raw) ? raw : []
+    const current = localStorage.getItem(key)
+    if (current) {
+      const raw = JSON.parse(current) as HistoryEntry[]
+      return Array.isArray(raw) ? raw : []
+    }
+    // Migrasi sekali dari key lama IzaLib
+    const legacy = localStorage.getItem(legacyKey(key))
+    if (legacy) {
+      localStorage.setItem(key, legacy)
+      localStorage.removeItem(legacyKey(key))
+      const raw = JSON.parse(legacy) as HistoryEntry[]
+      return Array.isArray(raw) ? raw : []
+    }
+    return []
   } catch {
     return []
   }
@@ -50,8 +75,8 @@ function loadLocalHistory(key: string): HistoryEntry[] {
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const storageKey = useMemo(() => `izalib_likes_${user?.id ?? 'guest'}`, [user?.id])
-  const historyKey = useMemo(() => `izalib_history_${user?.id ?? 'guest'}`, [user?.id])
+  const storageKey = useMemo(() => `tenshi_likes_${user?.id ?? 'guest'}`, [user?.id])
+  const historyKey = useMemo(() => `tenshi_history_${user?.id ?? 'guest'}`, [user?.id])
 
   const [likedIds, setLikedIds] = useState<string[]>(() => loadLocal(storageKey))
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadLocalHistory(historyKey))

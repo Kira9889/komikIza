@@ -23,7 +23,7 @@ export default function Logo({ size = 36, className = '' }: LogoProps) {
   return (
     <img
       src="/logo.png"
-      alt="IzaLib"
+      alt="Tenshi.id"
       width={size}
       height={size}
       onError={() => setFailed(true)}

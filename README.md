@@ -1,4 +1,4 @@
-# IzaLib — Prototype Digital Manga Library
+# Tenshi.id — Prototype Digital Manga Library
 
 Prototype website perpustakaan komik/manhwa/manhua (mirip Shinigami Scans) dibangun dengan **React + TypeScript + Vite + Tailwind CSS** (frontend) dan **Node/Express + Neon Postgres** (backend + auth).
 
@@ -33,7 +33,7 @@ Untuk menambahkan seluruh katalog sumber, gunakan tombol **Impor Shinigami** pad
 
 | Email | Password | Role |
 |-------|----------|------|
-| admin@izalib.test | admin123 | admin |
+| admin@tenshi.id | admin123 | admin |
 
 Setiap user yang mendaftar otomatis ber-role `user` (hanya bisa baca, register, dan simpan favorit).
 
@@ -76,7 +76,7 @@ Data disimpan di **Neon** (Postgres serverless). Skema tabel otomatis dibuat saa
    JWT_SECRET="ganti-dengan-string-acak-panjang"
    PORT=5001
    ```
-4. Nyalakan server — tabel langsung dibuat, akun admin `admin@izalib.test / admin123` otomatis di-seed.
+4. Nyalakan server — tabel langsung dibuat, akun admin `admin@tenshi.id / admin123` otomatis di-seed.
 
 > URL backend hanya dipakai di sisi **server** (`server/.env`) — kredensial database tidak pernah masuk ke browser.
 

@@ -6,7 +6,7 @@
 //
 // Env yang wajib diisi di Netlify Dashboard → Environment variables:
 //   DATABASE_URL = connection string Neon (sama seperti di Render)
-//   BACKEND_URL  = mis. https://izalib-api.onrender.com (tanpa /api di belakang)
+//   BACKEND_URL  = mis. https://tenshi-api.onrender.com (tanpa /api di belakang)
 // Lihat log eksekusi di Netlify Dashboard → Functions → keep-alive.
 import type { Config } from '@netlify/functions'
 import { neon } from '@neondatabase/serverless'
@@ -24,7 +24,7 @@ async function pingNeon(): Promise<{ ok: boolean; now?: string; error?: string }
 
 async function pingBackend(): Promise<{ ok: boolean; status?: number; error?: string }> {
   try {
-    const base = (process.env.BACKEND_URL || 'https://izalib-api.onrender.com').replace(/\/$/, '')
+    const base = (process.env.BACKEND_URL || 'https://tenshi-api.onrender.com').replace(/\/$/, '')
     const res = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(20_000) })
     return { ok: res.ok, status: res.status }
   } catch (e) {

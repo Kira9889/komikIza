@@ -52,7 +52,7 @@ export default function Navbar() {
         <NavLink to="/" className="flex items-center gap-2" onClick={closeMenu}>
           <Logo size={48} />
           <span className="font-display text-xl font-extrabold tracking-tight">
-            Iza<span className="text-primary-500">Lib</span>
+            Tenshi<span className="text-primary-500">.id</span>
           </span>
         </NavLink>
 

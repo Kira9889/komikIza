@@ -18,7 +18,10 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const STORAGE_KEY = 'izalib_user'
+const STORAGE_KEY = 'tenshi_user'
+const LEGACY_STORAGE_KEY = 'izalib_user'
+const LEGACY_USERS_KEY = 'izalib_users'
+const USERS_KEY = 'tenshi_users'
 
 interface AuthResponse {
   token: string
@@ -28,7 +31,16 @@ interface AuthResponse {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as User | null
+      const current = localStorage.getItem(STORAGE_KEY)
+      if (current) return JSON.parse(current) as User | null
+      // Migrasi sekali dari key lama IzaLib
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (legacy) {
+        localStorage.setItem(STORAGE_KEY, legacy)
+        localStorage.removeItem(LEGACY_STORAGE_KEY)
+        return JSON.parse(legacy) as User | null
+      }
+      return null
     } catch {
       return null
     }
@@ -130,7 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Mock auth (hanya saat backend offline) — termasuk akun admin demo
-    if (email === 'admin@izalib.test' && password === 'admin123') {
+    // Terima email lama (izalib) + baru (tenshi.id) agar akun lama tetap bisa login.
+    if ((email === 'admin@tenshi.id' || email === 'admin@izalib.test') && password === 'admin123') {
       persist({ id: 'admin', username: 'admin', email, role: 'admin' })
       return {}
     }
@@ -167,12 +180,21 @@ interface StoredUser extends User {
 
 function getRegistered(): StoredUser[] {
   try {
-    return JSON.parse(localStorage.getItem('izalib_users') ?? '[]') as StoredUser[]
+    const current = localStorage.getItem(USERS_KEY)
+    if (current) return JSON.parse(current) as StoredUser[]
+    // Migrasi sekali dari key lama IzaLib
+    const legacy = localStorage.getItem(LEGACY_USERS_KEY)
+    if (legacy) {
+      localStorage.setItem(USERS_KEY, legacy)
+      localStorage.removeItem(LEGACY_USERS_KEY)
+      return JSON.parse(legacy) as StoredUser[]
+    }
+    return []
   } catch {
     return []
   }
 }
 
 function saveRegistered(users: StoredUser[]) {
-  localStorage.setItem('izalib_users', JSON.stringify(users))
+  localStorage.setItem(USERS_KEY, JSON.stringify(users))
 }

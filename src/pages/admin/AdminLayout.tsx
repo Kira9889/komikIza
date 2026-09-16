@@ -26,7 +26,7 @@ export default function AdminLayout() {
         <Logo size={40} />
         <div>
           <div className="font-display text-sm font-extrabold">Admin</div>
-          <div className="text-[11px] text-general-400">IzaLib</div>
+          <div className="text-[11px] text-general-400">Tenshi.id</div>
         </div>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">

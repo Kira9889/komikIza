@@ -1,5 +1,5 @@
 -- ============================================================
--- IzaLib — Nhost / Hasura database schema (Postgres)
+-- Tenshi.id — Nhost / Hasura database schema (Postgres)
 -- Jalankan via Nhost Dashboard > Database > SQL Editor,
 -- atau melalui Nhost CLI (nhost migrate up / apply).
 -- ============================================================

@@ -13,7 +13,7 @@ dotenv.config()
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.PORT || 5001)
-const JWT_SECRET = process.env.JWT_SECRET || 'izalib-dev-secret-change-me'
+const JWT_SECRET = process.env.JWT_SECRET || 'tenshi-dev-secret-change-me'
 const SHINIGAMI_API_URL = process.env.SHINIGAMI_API_URL || 'https://api.shngm.io'
 const SHINIGAMI_ORIGIN = 'https://app.shinigami.asia'
 
@@ -49,7 +49,7 @@ async function ensureSchema() {
   const hash = await bcrypt.hash('admin123', 10)
   await query(
     `insert into members (email, username, password_hash, role)
-     values ('admin@izalib.test', 'admin', $1, 'admin')
+     values ('admin@tenshi.id', 'admin', $1, 'admin')
      on conflict (email) do nothing`,
     [hash],
   )
@@ -384,7 +384,17 @@ function proxyImageUrl(req, imageUrl) {
   return absoluteUrl(req, `/api/shinigami/image?url=${encodeURIComponent(imageUrl)}`)
 }
 
-app.get('/api/health', (req, res) => res.json({ ok: true }))
+// Health check sekaligus jaga Neon tetap hangat (SELECT ringan).
+// Dipanggil Cron tiap 5 menit agar Render + Neon tidak sleep.
+app.get('/api/health', async (_req, res) => {
+  try {
+    await query('select 1 as ok')
+    res.json({ ok: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ ok: false })
+  }
+})
 
 // ---------------- SHINIGAMI (live chapter source) ----------------
 app.get('/api/shinigami/chapter/:chapterId/pages', async (req, res) => {
@@ -918,9 +928,9 @@ ensureSchema()
       throw err
     })
     server.on('listening', () => {
-      console.log(`IzaLib server berjalan di http://localhost:${PORT}`)
+      console.log(`Tenshi.id server berjalan di http://localhost:${PORT}`)
       console.log('Database Neon: OK (skema siap)')
-      console.log('Akun admin demo: admin@izalib.test / admin123')
+      console.log('Akun admin demo: admin@tenshi.id / admin123')
     })
   })
   .catch(err => {

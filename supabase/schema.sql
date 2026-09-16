@@ -1,5 +1,5 @@
 -- ============================================================
--- IzaLib — Digital Manga Library database schema (Supabase)
+-- Tenshi.id — Digital Manga Library database schema (Supabase)
 -- Jalankan script ini via Supabase SQL Editor / Supabase CLI.
 -- ============================================================
 

@@ -38,7 +38,7 @@ export default function Home() {
             className="relative block aspect-square overflow-hidden rounded-xl border border-(--line) bg-(--card) lg:col-span-2 lg:aspect-16/5"
           >
             <img
-              src="https://placehold.co/1200x400/1a1a2e/6f39ee?text=Selamat+Datang+di+IzaLib"
+              src="https://placehold.co/1200x400/1a1a2e/6f39ee?text=Selamat+Datang+di+Tenshi.id"
               alt="Banner"
               className="h-full w-full object-cover"
             />
@@ -157,7 +157,7 @@ const ANNOUNCEMENTS: { title: string; date: string; body: string }[] = [
   {
     title: 'Lebih Ringan & Cepat',
     date: '2026-09-14T23:35:57+07:00',
-    body: 'Logo baru IzaLib yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
+    body: 'Logo baru Tenshi.id yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
   },
 ]
 

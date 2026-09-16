@@ -1,5 +1,5 @@
 -- ============================================================
--- IzaLib — Neon (Postgres) database schema — versi standalone
+-- Tenshi.id — Neon (Postgres) database schema — versi standalone
 -- Otomatis dijalankan saat server dinyalakan (lihat index.js),
 -- atau bisa juga dijalankan manual via Neon SQL Editor.
 -- ============================================================

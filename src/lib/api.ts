@@ -1,10 +1,20 @@
 const API_BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined) || '/api'
 
-const TOKEN_KEY = 'izalib_token'
+const TOKEN_KEY = 'tenshi_token'
+const LEGACY_TOKEN_KEY = 'izalib_token'
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  const current = localStorage.getItem(TOKEN_KEY)
+  if (current) return current
+  // Migrasi sekali dari key lama IzaLib
+  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY)
+  if (legacy) {
+    localStorage.setItem(TOKEN_KEY, legacy)
+    localStorage.removeItem(LEGACY_TOKEN_KEY)
+    return legacy
+  }
+  return null
 }
 
 export function setToken(token: string | null) {

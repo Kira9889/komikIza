@@ -105,7 +105,7 @@ function getMailer() {
   return mailer
 }
 
-async function createAndSendCode(email) {
+async function createCode(email) {
   const code = String(randomInt(100000, 1000000))
   const codeHash = await bcrypt.hash(code, 10)
   const expiresAt = new Date(Date.now() + CODE_TTL_MS).toISOString()
@@ -119,7 +119,10 @@ async function createAndSendCode(email) {
        created_at = now()`,
     [email, codeHash, expiresAt],
   )
+  return code
+}
 
+async function sendCodeEmail(email, code) {
   const mail = getMailer()
   if (mail) {
     const from = process.env.SMTP_FROM || process.env.SMTP_USER
@@ -142,6 +145,11 @@ async function createAndSendCode(email) {
   console.log(`[verifikasi] SMTP belum diset — kode untuk ${email}: ${code}`)
   const devCode = process.env.NODE_ENV === 'production' ? undefined : code
   return { sent: false, devCode }
+}
+
+async function createAndSendCode(email) {
+  const code = await createCode(email)
+  return sendCodeEmail(email, code)
 }
 
 // ---------------------------------------------------------------
@@ -587,8 +595,14 @@ app.post('/api/auth/register', async (req, res) => {
         throw e
       })
     }
-    const result = await createAndSendCode(mail)
-    res.json({ needsVerification: true, email: mail, emailSent: result.sent, devCode: result.devCode })
+    const code = await createCode(mail)
+    // Balas langsung agar UI tidak menunggu SMTP (koneksi Gmail bisa 3-10
+    // detik saat dingin). Email dikirim di background; kalau gagal sampai,
+    // user tinggal pakai tombol kirim-ulang di halaman verifikasi.
+    res.json({ needsVerification: true, email: mail, emailSent: !!getMailer() })
+    sendCodeEmail(mail, code).catch(e =>
+      console.error('[verifikasi] gagal kirim email:', e.message),
+    )
   } catch (e) {
     console.error(e)
     res.status(e.status || 500).json({ error: e.message || 'Gagal mendaftar' })

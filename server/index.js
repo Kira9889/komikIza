@@ -857,6 +857,30 @@ app.get('/api/manga/:slug', async (req, res) => {
   }
 })
 
+// Catat 1 view saat user membuka chapter (publik, tanpa login).
+// Cache in-memory ikut dinaikkan agar angka terbaru langsung terlihat
+// tanpa menunggu TTL 3 menit.
+app.post('/api/manga/:id/view', async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
+    const rows = await query(
+      'update manga set views_count = views_count + 1 where id = $1 returning views_count',
+      [id],
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
+    const views = Number(rows[0].views_count)
+    if (mangaCache) {
+      const cached = mangaCache.find(m => m.id === id)
+      if (cached) cached.views_count = views
+    }
+    res.json({ views_count: views })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mencatat view' })
+  }
+})
+
 // ---------------- MANGA (admin write) ----------------
 app.post('/api/manga', requireAuth, requireAdmin, async (req, res) => {
   try {

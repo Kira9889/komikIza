@@ -91,6 +91,16 @@ export async function fetchChapters(mangaId: string, opts?: { slim?: boolean }):
   }
 }
 
+// +1 view saat user membuka chapter (fire-and-forget, publik).
+export async function recordView(mangaId: string): Promise<void> {
+  if (!(await isBackendOnline())) return
+  try {
+    await apiFetch(`/manga/${mangaId}/view`, { method: 'POST', body: '{}' })
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 export async function fetchShinigamiPages(chapterId: string): Promise<Chapter['pages']> {
   try {
     return await apiFetch<Chapter['pages']>(`/shinigami/chapter/${encodeURIComponent(chapterId)}/pages`)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchChapters, fetchMangaBySlug, fetchShinigamiPages } from '../api/library'
+import { fetchChapters, fetchMangaBySlug, fetchShinigamiPages, recordView } from '../api/library'
 import { useLibrary } from '../context/LibraryContext'
 import type { Manga, Chapter } from '../types'
 import { toDriveImage } from '../lib/drive'
@@ -60,6 +60,7 @@ export default function ReadChapter() {
       setCurrent(selected)
       if (selected) {
         recordHistory({ manga_id: m.id, chapter_id: selected.id, chapter_name: selected.name })
+        recordView(m.id)
       }
     })
   }, [slug, chapterId])

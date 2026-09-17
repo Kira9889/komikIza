@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Logo from '../Logo'
 import ProfilePopup from '../auth/ProfilePopup'
+import NavbarSearch from './NavbarSearch'
 import {
   HomeIcon,
   CompassIcon,
@@ -28,6 +29,37 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 
 export default function Navbar() {
   const [open, setOpen] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const searchToggleRef = useRef<HTMLDivElement>(null)
+  const searchPanelRef = useRef<HTMLDivElement>(null)
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+  const menuPanelRef = useRef<HTMLElement>(null)
+
+  // Klik apapun di luar tombol + panel search mobile → tutup.
+  useEffect(() => {
+    if (!showSearch) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (searchToggleRef.current?.contains(t)) return
+      if (searchPanelRef.current?.contains(t)) return
+      setShowSearch(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showSearch])
+
+  // Sama untuk menu hamburger: klik di luar tombol + panel → tutup.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (menuBtnRef.current?.contains(t)) return
+      if (menuPanelRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [showProfile, setShowProfile] = useState(false)
   const { user, logout } = useAuth()
@@ -64,6 +96,8 @@ export default function Navbar() {
           ))}
         </nav>
 
+        <NavbarSearch className="hidden min-w-0 flex-1 md:block lg:max-w-xs" />
+
         <div className="hidden md:flex items-center gap-3">
           <button
             onClick={toggleTheme}
@@ -91,18 +125,43 @@ export default function Navbar() {
           )}
         </div>
 
-        <button
-          className="grid h-9 w-9 place-items-center rounded-lg border border-(--line) text-general-300 md:hidden"
-          aria-label="Menu"
-          onClick={() => setOpen(v => !v)}
-        >
-          {open ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
-        </button>
+        <div ref={searchToggleRef} className="flex items-center gap-2 md:hidden">
+          <button
+            className={`grid h-9 w-9 place-items-center rounded-lg border transition md:hidden ${
+              showSearch
+                ? 'border-primary-500/50 text-primary-500'
+                : 'border-(--line) text-general-300'
+            }`}
+            aria-label="Cari"
+            onClick={() => setShowSearch(v => !v)}
+          >
+            <SearchIcon className="h-5 w-5" />
+          </button>
+          <button
+            ref={menuBtnRef}
+            className="grid h-9 w-9 place-items-center rounded-lg border border-(--line) text-general-300 md:hidden"
+            aria-label="Menu"
+            onClick={() => setOpen(v => !v)}
+          >
+            {open ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
+
+      {/* Search mobile: melebar saat ikon diklik */}
+      {showSearch && (
+        <div ref={searchPanelRef} className="px-4 pb-3 md:hidden">
+          <NavbarSearch
+            className="w-full"
+            autoFocus
+            onPick={() => setShowSearch(false)}
+          />
+        </div>
+      )}
 
       {/* Dropdown mobile */}
       {open && (
-        <nav className="border-t border-(--line) bg-(--bg) px-4 py-3 md:hidden">
+        <nav ref={menuPanelRef} className="border-t border-(--line) bg-(--bg) px-4 py-3 md:hidden">
           <div className="space-y-1">
             {navLinks.map(l => (
               <NavLink

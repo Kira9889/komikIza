@@ -50,6 +50,13 @@ export interface Manga {
   follows_count: number
   rating: number
   rating_count: number
+  /** Statistik apa adanya dari Shinigami (diisi saat import katalog). */
+  shinigami_views?: number
+  shinigami_bookmarks?: number
+  shinigami_rating?: number
+  shinigami_rank?: number
+  latest_chapter_number?: number
+  latest_chapter_time?: string
   tags: string[]
   authors: Author[]
   genres: Genre[]

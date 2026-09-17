@@ -27,6 +27,8 @@ interface LibraryContextValue {
   recordHistory: (entry: { manga_id: string; chapter_id: string; chapter_name: string }) => void
   removeHistory: (mangaId: string) => void
   clearHistory: () => void
+  isChapterRead: (mangaId: string, chapterId: string) => boolean
+  mergeReadChapters: (mangaId: string, ids: string[]) => void
 }
 
 const LibraryContext = createContext<LibraryContextValue | null>(null)
@@ -73,18 +75,49 @@ function loadLocalHistory(key: string): HistoryEntry[] {
   }
 }
 
+function loadLocalReadMap(key: string): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, string[]>
+      if (parsed && typeof parsed === 'object') return parsed
+    }
+    const legacy = localStorage.getItem(legacyKey(key))
+    if (legacy) {
+      localStorage.setItem(key, legacy)
+      localStorage.removeItem(legacyKey(key))
+      const parsed = JSON.parse(legacy) as Record<string, string[]>
+      if (parsed && typeof parsed === 'object') return parsed
+    }
+    return {}
+  } catch {
+    return {}
+  }
+}
+
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const storageKey = useMemo(() => `tenshi_likes_${user?.id ?? 'guest'}`, [user?.id])
   const historyKey = useMemo(() => `tenshi_history_${user?.id ?? 'guest'}`, [user?.id])
+  const readKey = useMemo(() => `tenshi_read_${user?.id ?? 'guest'}`, [user?.id])
 
   const [likedIds, setLikedIds] = useState<string[]>(() => loadLocal(storageKey))
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadLocalHistory(historyKey))
+  const [readMap, setReadMap] = useState<Record<string, string[]>>(() => loadLocalReadMap(readKey))
 
   // Simpan ke localStorage sebagai cache/mirror
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(likedIds))
   }, [likedIds, storageKey])
+
+  useEffect(() => {
+    try {
+      const entries = Object.entries(readMap).slice(-100)
+      localStorage.setItem(readKey, JSON.stringify(Object.fromEntries(entries)))
+    } catch {
+      /* abaikan */
+    }
+  }, [readMap, readKey])
 
   useEffect(() => {
     localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 100)))
@@ -114,6 +147,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       if (!cancelled) {
         setLikedIds(loadLocal(storageKey))
         setHistory(loadLocalHistory(historyKey))
+        setReadMap(loadLocalReadMap(readKey))
       }
     })()
     return () => {
@@ -141,9 +175,23 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const isLiked = (id: string) => likedIds.includes(id)
 
+  const isChapterRead = (mangaId: string, chapterId: string) =>
+    (readMap[mangaId] ?? []).includes(chapterId)
+
+  const mergeReadChapters = (mangaId: string, ids: string[]) => {
+    if (!ids.length) return
+    setReadMap(prev => {
+      const merged = Array.from(new Set([...(prev[mangaId] ?? []), ...ids]))
+      if (merged.length === (prev[mangaId] ?? []).length) return prev
+      return { ...prev, [mangaId]: merged }
+    })
+  }
+
   const recordHistory = (entry: { manga_id: string; chapter_id: string; chapter_name: string }) => {
     const full: HistoryEntry = { ...entry, updated_at: new Date().toISOString() }
     setHistory(prev => [full, ...prev.filter(h => h.manga_id !== entry.manga_id)].slice(0, 100))
+    // Tandai chapter ini sudah dibaca (abu-abu di daftar).
+    if (entry.chapter_id) mergeReadChapters(entry.manga_id, [entry.chapter_id])
     if (user) {
       isBackendOnline().then(online => {
         if (!online) return
@@ -156,6 +204,12 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const removeHistory = (mangaId: string) => {
     setHistory(prev => prev.filter(h => h.manga_id !== mangaId))
+    setReadMap(prev => {
+      if (!prev[mangaId]) return prev
+      const next = { ...prev }
+      delete next[mangaId]
+      return next
+    })
     if (user) {
       isBackendOnline().then(online => {
         if (!online) return
@@ -166,6 +220,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   const clearHistory = () => {
     setHistory([])
+    setReadMap({})
     if (user) {
       isBackendOnline().then(online => {
         if (!online) return
@@ -176,7 +231,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   return (
     <LibraryContext.Provider
-      value={{ likedIds, toggleLike, isLiked, history, recordHistory, removeHistory, clearHistory }}
+      value={{ likedIds, toggleLike, isLiked, history, recordHistory, removeHistory, clearHistory, isChapterRead, mergeReadChapters }}
     >
       {children}
     </LibraryContext.Provider>

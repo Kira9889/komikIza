@@ -148,6 +148,20 @@ create table if not exists public.history (
 create index if not exists idx_history_user_updated on public.history(user_id, updated_at desc);
 
 -- ------------------------------------------------------------
+-- CHAPTER YANG SUDAH DIBACA (1 baris per user+judul+chapter)
+-- Untuk mengabu-abukan chapter yang selesai dibaca di daftar.
+-- ------------------------------------------------------------
+create table if not exists public.read_chapters (
+  user_id    uuid not null references public.members(id) on delete cascade,
+  manga_id   uuid not null references public.manga(id) on delete cascade,
+  chapter_id uuid not null references public.chapters(id) on delete cascade,
+  read_at    timestamptz not null default now(),
+  primary key (user_id, manga_id, chapter_id)
+);
+
+create index if not exists idx_read_chapters_user_manga on public.read_chapters(user_id, manga_id);
+
+-- ------------------------------------------------------------
 -- VERIFIKASI EMAIL + LOGIN GOOGLE (Tenshi.id)
 -- Ditambah belakangan; ALTER ... IF NOT EXISTS aman dijalankan
 -- ulang saat server start (ensureSchema).
@@ -166,4 +180,20 @@ create table if not exists public.email_verification_codes (
   attempts   int not null default 0,
   created_at timestamptz not null default now()
 );
+
+-- ------------------------------------------------------------
+-- STATISTIK SHINIGAMI (sorting Update/Populer apa adanya dari sumber)
+-- Disimpan terpisah dari counter lokal (views_count/likes) agar
+-- bacaan lokal (+1) tidak tertimpa saat import katalog.
+-- ------------------------------------------------------------
+alter table public.manga add column if not exists shinigami_views bigint not null default 0;
+alter table public.manga add column if not exists shinigami_bookmarks bigint not null default 0;
+alter table public.manga add column if not exists shinigami_rating numeric(3,2) not null default 0;
+alter table public.manga add column if not exists shinigami_rank int not null default 9999;
+alter table public.manga add column if not exists shinigami_updated_at timestamptz;
+alter table public.manga add column if not exists latest_chapter_number int not null default 0;
+alter table public.manga add column if not exists latest_chapter_time timestamptz;
+create index if not exists idx_manga_shinigami_views on public.manga(shinigami_views desc);
+create index if not exists idx_manga_shinigami_bookmarks on public.manga(shinigami_bookmarks desc);
+create index if not exists idx_manga_latest_chapter_time on public.manga(latest_chapter_time desc);
 

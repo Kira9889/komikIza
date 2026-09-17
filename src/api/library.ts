@@ -91,6 +91,19 @@ export async function fetchChapters(mangaId: string, opts?: { slim?: boolean }):
   }
 }
 
+// ID chapter yang sudah dibaca user untuk 1 judul (login + online saja).
+export async function fetchReadChapters(mangaId: string): Promise<string[]> {
+  try {
+    const res = await apiFetch<{ ids: string[] }>('/me/read-chapters', {
+      query: { manga_id: mangaId },
+    })
+    return res.ids
+  } catch (e) {
+    console.error(e)
+    return []
+  }
+}
+
 // +1 view saat user membuka chapter (fire-and-forget, publik).
 export async function recordView(mangaId: string): Promise<void> {
   if (!(await isBackendOnline())) return

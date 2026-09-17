@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchChapters, fetchMangaBySlug, fetchShinigamiPages, recordView } from '../api/library'
+import { fetchChapters, fetchMangaBySlug, fetchReadChapters, fetchShinigamiPages, recordView } from '../api/library'
 import { useLibrary } from '../context/LibraryContext'
+import { useAuth } from '../context/AuthContext'
 import type { Manga, Chapter } from '../types'
 import { toDriveImage } from '../lib/drive'
 import {
@@ -21,7 +22,29 @@ export default function ReadChapter() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [readerControlsOpen, setReaderControlsOpen] = useState(false)
-  const { recordHistory } = useLibrary()
+  const { recordHistory, isChapterRead, mergeReadChapters } = useLibrary()
+  const { user } = useAuth()
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+  const menuPanelRef = useRef<HTMLDivElement>(null)
+  const activeChapterRef = useRef<HTMLAnchorElement>(null)
+
+  // Klik di luar tombol + panel → tutup daftar chapter.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (menuBtnRef.current?.contains(t)) return
+      if (menuPanelRef.current?.contains(t)) return
+      setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [menuOpen])
+
+  // Scroll panel ke chapter yang sedang dibaca saat dibuka.
+  useEffect(() => {
+    if (menuOpen) activeChapterRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [menuOpen])
 
   // Chrome reader (header + navigasi + daftar chapter) disembunyikan
   // saat membaca, muncul lagi saat gambar diketuk.
@@ -62,6 +85,9 @@ export default function ReadChapter() {
         recordHistory({ manga_id: m.id, chapter_id: selected.id, chapter_name: selected.name })
         recordView(m.id)
       }
+      if (user) {
+        fetchReadChapters(m.id).then(ids => mergeReadChapters(m.id, ids))
+      }
     })
   }, [slug, chapterId])
 
@@ -92,6 +118,7 @@ export default function ReadChapter() {
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             <button
+              ref={menuBtnRef}
               onClick={() => setMenuOpen(o => !o)}
               className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/15 bg-black/20 text-neutral-200 transition hover:border-primary-500 hover:text-primary-500"
               aria-label="Daftar chapter"
@@ -136,28 +163,31 @@ export default function ReadChapter() {
           </div>
         </div>
 
-        {/* Daftar chapter (panel hamburger) */}
+        {/* Daftar chapter: dropdown ramping rata kiri agar tidak menutupi komik */}
         {menuOpen && (
-          <div className="mx-auto flex max-w-5xl px-4 pt-2 pb-2">
-            <div className="max-h-72 w-full overflow-y-auto rounded-lg border border-white/10 bg-[#141416]/95 p-2 shadow-2xl backdrop-blur-md">
+          <div className="mx-auto max-w-5xl px-4 pt-1 pb-2">
+            <div
+              ref={menuPanelRef}
+              className="max-h-60 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-white/10 bg-[#141416]/95 p-1.5 shadow-2xl backdrop-blur-md"
+            >
               {chapters.map(ch => {
                 const active = ch.id === current.id
+                const read = !active && isChapterRead(manga.id, ch.id)
                 return (
                   <Link
                     key={ch.id}
+                    ref={active ? activeChapterRef : undefined}
                     to={`/manga/${manga.slug}/chapter/${ch.id}`}
-                    className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition ${
+                    className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition ${
                       active
                         ? 'bg-primary-500/15 font-semibold text-primary-400'
-                        : 'text-neutral-300 hover:bg-white/5 hover:text-neutral-100'
+                        : read
+                          ? 'text-neutral-600 hover:bg-white/5'
+                          : 'text-neutral-300 hover:bg-white/5 hover:text-neutral-100'
                     }`}
                   >
-                    {ch.name}
-                    {active && (
-                      <span className="rounded bg-primary-500/20 px-1.5 py-0.5 text-[10px] font-bold text-primary-300">
-                        Sedang dibaca
-                      </span>
-                    )}
+                    <span className="truncate">{ch.name}</span>
+                    {active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-400" />}
                   </Link>
                 )
               })}

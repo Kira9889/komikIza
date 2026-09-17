@@ -229,12 +229,25 @@ function mapManga(row) {
     follows_count: Number(row.follows_count || 0),
     rating: Number(row.rating || 0),
     rating_count: Number(row.rating_count || 0),
+    shinigami_views: Number(row.shinigami_views || 0),
+    shinigami_bookmarks: Number(row.shinigami_bookmarks || 0),
+    shinigami_rating: Number(row.shinigami_rating || 0),
+    shinigami_rank: Number(row.shinigami_rank ?? 9999),
+    latest_chapter_number: Number(row.latest_chapter_number || 0),
+    latest_chapter_time: row.latest_chapter_time ? new Date(row.latest_chapter_time).toISOString() : undefined,
     tags: row.tags || [],
     genres: row.genres || [],
     authors: row.authors || [],
     release_date: formatDate(row.release_date),
     created_at: row.created_at ? new Date(row.created_at).toISOString() : '',
   }
+}
+
+// Waktu update = rilis chapter terbaru (fallback: baris dibuat).
+function mangaUpdateTs(m) {
+  return m.latest_chapter?.release_timestamp
+    ? m.latest_chapter.release_timestamp * 1000
+    : new Date(m.created_at).getTime()
 }
 
 function slugify(text) {
@@ -379,6 +392,10 @@ async function importShinigamiCatalog() {
     }
   }
 
+  const toIso = v => {
+    const t = Date.parse(v || '')
+    return Number.isNaN(t) ? null : new Date(t).toISOString()
+  }
   const rows = catalog.map(item => ({
     slug: `${slugify(item.title).slice(0, 80) || 'manga'}-${String(item.manga_id).slice(0, 8)}`,
     title: item.title,
@@ -390,15 +407,29 @@ async function importShinigamiCatalog() {
     shinigami_id: item.manga_id,
     alternative_names: String(item.alternative_title || '').split(',').map(name => name.trim()).filter(Boolean),
     tags: (item.taxonomy?.Genre || []).map(genre => genre.name).filter(Boolean),
+    shinigami_views: Number(item.view_count || 0),
+    shinigami_bookmarks: Number(item.bookmark_count || 0),
+    shinigami_rating: Number(item.user_rate || 0),
+    shinigami_rank: Number(item.rank ?? 9999),
+    shinigami_updated_at: toIso(item.updated_at),
+    latest_chapter_number: Number(item.latest_chapter_number || 0),
+    latest_chapter_time: toIso(item.latest_chapter_time),
   }))
   if (!rows.length) return { total: 0, linked, imported: 0 }
 
   const result = await query(
-    `insert into manga (slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags)
-     select slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags
+    `insert into manga (slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags,
+                        shinigami_views, shinigami_bookmarks, shinigami_rating, shinigami_rank, shinigami_updated_at,
+                        latest_chapter_number, latest_chapter_time)
+     select slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags,
+            shinigami_views, shinigami_bookmarks, shinigami_rating, shinigami_rank, shinigami_updated_at,
+            latest_chapter_number, latest_chapter_time
      from jsonb_to_recordset($1::jsonb) as source(
        slug text, title text, type text, status text, description text, cover_url text, banner_url text,
-       shinigami_id text, alternative_names text[], tags text[]
+       shinigami_id text, alternative_names text[], tags text[],
+       shinigami_views bigint, shinigami_bookmarks bigint, shinigami_rating numeric,
+       shinigami_rank int, shinigami_updated_at timestamptz,
+       latest_chapter_number int, latest_chapter_time timestamptz
      )
      on conflict (shinigami_id) where shinigami_id is not null do update set
        title = excluded.title,
@@ -410,7 +441,14 @@ async function importShinigamiCatalog() {
        banner_url = case when manga.banner_url like '%placehold.co%' or manga.banner_url = '' or manga.banner_url is null
                          then excluded.banner_url else manga.banner_url end,
        alternative_names = excluded.alternative_names,
-       tags = excluded.tags
+       tags = excluded.tags,
+       shinigami_views = excluded.shinigami_views,
+       shinigami_bookmarks = excluded.shinigami_bookmarks,
+       shinigami_rating = excluded.shinigami_rating,
+       shinigami_rank = excluded.shinigami_rank,
+       shinigami_updated_at = excluded.shinigami_updated_at,
+       latest_chapter_number = excluded.latest_chapter_number,
+       latest_chapter_time = excluded.latest_chapter_time
      returning id`,
     [JSON.stringify(rows)],
   )
@@ -461,7 +499,24 @@ async function getCachedMangaList(force = false) {
     return mangaCache
   }
   const rows = await query(`${MANGA_SELECT} order by m.views_count desc limit 3000`)
-  mangaCache = rows.map(mapManga)
+  // Chapter terbaru tiap judul (label "x menit lalu" + sorting Update).
+  const latest = await query(
+    `select distinct on (manga_id) manga_id, id, name, release_timestamp
+     from chapters order by manga_id, release_timestamp desc`,
+  )
+  const latestByManga = new Map(latest.map(r => [r.manga_id, r]))
+  mangaCache = rows.map(row => {
+    const m = mapManga(row)
+    const ch = latestByManga.get(row.id)
+    if (ch) {
+      m.latest_chapter = {
+        id: ch.id,
+        name: ch.name,
+        release_timestamp: Number(ch.release_timestamp || 0),
+      }
+    }
+    return m
+  })
   mangaCacheTime = Date.now()
   return mangaCache
 }
@@ -781,20 +836,28 @@ app.put('/api/me/username', requireAuth, async (req, res) => {
 app.get('/api/manga/home', async (_req, res) => {
   try {
     const list = await getCachedMangaList()
-    const byCreated = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    const byViews = [...list].sort((a, b) => b.views_count - a.views_count)
+    // Update = chapter terbaru yang benar-benar baru (waktu rilis asli dari
+    // sumber; fallback ke waktu baris dibuat bila belum ada chapter).
+    const byUpdate = [...list].sort((a, b) => mangaUpdateTs(b) - mangaUpdateTs(a))
+    // Populer apa adanya dari Shinigami: Harian = views, Mingguan = bookmark.
+    const byShiniViews = [...list].sort(
+      (a, b) => b.shinigami_views - a.shinigami_views || b.views_count - a.views_count,
+    )
+    const byShiniBookmarks = [...list].sort(
+      (a, b) => b.shinigami_bookmarks - a.shinigami_bookmarks || b.follows_count - a.follows_count,
+    )
     const byFollows = [...list].sort((a, b) => b.follows_count - a.follows_count)
 
     res.json({
-      updates: byCreated.slice(0, 12),
+      updates: byUpdate.slice(0, 12),
       recommendation: {
         manhwa: list.filter(m => m.type === 'manhwa').slice(0, 6),
         manga: list.filter(m => m.type === 'manga').slice(0, 6),
         manhua: list.filter(m => m.type === 'manhua').slice(0, 6),
       },
       popular: {
-        daily: byViews.slice(0, 8),
-        weekly: list.slice(0, 8),
+        daily: byShiniViews.slice(0, 8),
+        weekly: byShiniBookmarks.slice(0, 8),
         all: byFollows.slice(0, 8),
       },
     })
@@ -832,7 +895,7 @@ app.get('/api/manga', async (req, res) => {
     }
 
     if (order === 'latest') {
-      result = [...result].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      result = [...result].sort((a, b) => mangaUpdateTs(b) - mangaUpdateTs(a))
     } else if (order === 'follows') {
       result = [...result].sort((a, b) => b.follows_count - a.follows_count)
     } else if (order === 'rating') {
@@ -864,7 +927,21 @@ app.get('/api/manga/:slug', async (req, res) => {
     }
     const rows = await query(`${MANGA_SELECT} where m.slug = $1 limit 1`, [req.params.slug])
     if (!rows[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
-    res.json(mapManga(rows[0]))
+    const mapped = mapManga(rows[0])
+    const ch = (
+      await query(
+        'select id, name, release_timestamp from chapters where manga_id = $1 order by release_timestamp desc limit 1',
+        [mapped.id],
+      )
+    )[0]
+    if (ch) {
+      mapped.latest_chapter = {
+        id: ch.id,
+        name: ch.name,
+        release_timestamp: Number(ch.release_timestamp || 0),
+      }
+    }
+    res.json(mapped)
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengambil data' })
@@ -1182,6 +1259,14 @@ app.put('/api/me/history', requireAuth, async (req, res) => {
          updated_at = now()`,
       [req.user.id, manga_id, chapter_id || null, String(chapter_name || '')],
     )
+    // Tandai chapter ini sudah dibaca (untuk warna abu-abu di daftar).
+    if (chapter_id && isValidUuid(chapter_id)) {
+      await query(
+        `insert into read_chapters (user_id, manga_id, chapter_id, read_at)
+         values ($1, $2, $3, now()) on conflict do nothing`,
+        [req.user.id, manga_id, chapter_id],
+      )
+    }
     res.json({ ok: true })
   } catch (e) {
     console.error(e)
@@ -1192,6 +1277,7 @@ app.put('/api/me/history', requireAuth, async (req, res) => {
 app.delete('/api/me/history/:mangaId', requireAuth, async (req, res) => {
   try {
     await query('delete from history where user_id = $1 and manga_id = $2', [req.user.id, req.params.mangaId])
+    await query('delete from read_chapters where user_id = $1 and manga_id = $2', [req.user.id, req.params.mangaId])
     res.status(204).end()
   } catch (e) {
     console.error(e)
@@ -1202,10 +1288,27 @@ app.delete('/api/me/history/:mangaId', requireAuth, async (req, res) => {
 app.delete('/api/me/history', requireAuth, async (req, res) => {
   try {
     await query('delete from history where user_id = $1', [req.user.id])
+    await query('delete from read_chapters where user_id = $1', [req.user.id])
     res.status(204).end()
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal menghapus riwayat' })
+  }
+})
+
+// ID chapter yang sudah dibaca untuk 1 judul.
+app.get('/api/me/read-chapters', requireAuth, async (req, res) => {
+  try {
+    const mangaId = String(req.query.manga_id || '')
+    if (!isValidUuid(mangaId)) return res.status(400).json({ error: 'ID judul tidak valid' })
+    const rows = await query(
+      'select chapter_id from read_chapters where user_id = $1 and manga_id = $2',
+      [req.user.id, mangaId],
+    )
+    res.json({ ids: rows.map(r => r.chapter_id) })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil chapter dibaca' })
   }
 })
 

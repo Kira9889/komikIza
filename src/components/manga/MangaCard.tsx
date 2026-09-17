@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { Manga } from '../../types'
+import { timeAgo } from '../../lib/time'
+import { displayRating, displayViews } from '../../lib/stats'
 import { EyeIcon } from '../../icons'
 
 function formatCompact(n: number) {
@@ -28,11 +30,11 @@ export default function MangaCard({ manga }: { manga: Manga }) {
         <div className="absolute bottom-0 left-0 right-0 flex items-end justify-between gap-2 p-2.5">
           <span className="flex items-center gap-1 text-xs text-white/90">
             <EyeIcon className="h-3.5 w-3.5" />
-            {formatCompact(manga.views_count)}
+            {formatCompact(displayViews(manga))}
           </span>
           <span className="flex items-center gap-1 text-xs font-semibold text-primary-400">
             <Star className="h-3.5 w-3.5" />
-            {manga.rating.toFixed(1)}
+            {displayRating(manga).toFixed(1)}
           </span>
         </div>
       </div>
@@ -41,7 +43,9 @@ export default function MangaCard({ manga }: { manga: Manga }) {
           {manga.title}
         </h3>
         <p className="mt-0.5 line-clamp-1 text-xs text-general-400">
-          {manga.latest_chapter?.name ?? 'Sedang tayang'}
+          {manga.latest_chapter
+            ? `${manga.latest_chapter.name}${manga.latest_chapter.release_timestamp ? ` • ${timeAgo(manga.latest_chapter.release_timestamp)}` : ''}`
+            : 'Sedang tayang'}
         </p>
       </div>
     </Link>

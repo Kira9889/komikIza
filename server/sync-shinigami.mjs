@@ -56,6 +56,10 @@ const pool = new pg.Pool({
 })
 const query = async (text, params) => (await pool.query(text, params)).rows
 const delay = ms => new Promise(r => setTimeout(r, ms))
+const toIso = v => {
+  const t = Date.parse(v || '')
+  return Number.isNaN(t) ? null : new Date(t).toISOString()
+}
 // Paralelisasi unduhan pages (default 5, maks 16 via --workers=N).
 const workers = Math.max(1, Math.min(Number(args.workers || 5), 16))
 const isValidUuid = v =>
@@ -186,13 +190,27 @@ async function importCatalog() {
     shinigami_id: item.manga_id,
     alternative_names: String(item.alternative_title || '').split(',').map(n => n.trim()).filter(Boolean),
     tags: (item.taxonomy?.Genre || []).map(g => g.name).filter(Boolean),
+    shinigami_views: Number(item.view_count || 0),
+    shinigami_bookmarks: Number(item.bookmark_count || 0),
+    shinigami_rating: Number(item.user_rate || 0),
+    shinigami_rank: Number(item.rank ?? 9999),
+    shinigami_updated_at: toIso(item.updated_at),
+    latest_chapter_number: Number(item.latest_chapter_number || 0),
+    latest_chapter_time: toIso(item.latest_chapter_time),
   }))
   const result = await query(
-    `insert into manga (slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags)
-     select slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags
+    `insert into manga (slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags,
+                        shinigami_views, shinigami_bookmarks, shinigami_rating, shinigami_rank, shinigami_updated_at,
+                        latest_chapter_number, latest_chapter_time)
+     select slug, title, type, status, description, cover_url, banner_url, shinigami_id, alternative_names, tags,
+            shinigami_views, shinigami_bookmarks, shinigami_rating, shinigami_rank, shinigami_updated_at,
+            latest_chapter_number, latest_chapter_time
      from jsonb_to_recordset($1::jsonb) as source(
        slug text, title text, type text, status text, description text, cover_url text, banner_url text,
-       shinigami_id text, alternative_names text[], tags text[]
+       shinigami_id text, alternative_names text[], tags text[],
+       shinigami_views bigint, shinigami_bookmarks bigint, shinigami_rating numeric,
+       shinigami_rank int, shinigami_updated_at timestamptz,
+       latest_chapter_number int, latest_chapter_time timestamptz
      )
      on conflict (shinigami_id) where shinigami_id is not null do update set
        title = excluded.title,
@@ -204,7 +222,14 @@ async function importCatalog() {
        banner_url = case when manga.banner_url like '%placehold.co%' or manga.banner_url = '' or manga.banner_url is null
                          then excluded.banner_url else manga.banner_url end,
        alternative_names = excluded.alternative_names,
-       tags = excluded.tags
+       tags = excluded.tags,
+       shinigami_views = excluded.shinigami_views,
+       shinigami_bookmarks = excluded.shinigami_bookmarks,
+       shinigami_rating = excluded.shinigami_rating,
+       shinigami_rank = excluded.shinigami_rank,
+       shinigami_updated_at = excluded.shinigami_updated_at,
+       latest_chapter_number = excluded.latest_chapter_number,
+       latest_chapter_time = excluded.latest_chapter_time
      returning id`,
     [JSON.stringify(rows)],
   )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { fetchMangaBySlug, fetchChapters } from '../api/library'
+import { fetchMangaBySlug, fetchChapters, fetchReadChapters } from '../api/library'
+import { displayFollows, displayRating, displayViews, isShinigamiRating } from '../lib/stats'
 import type { Manga, Chapter } from '../types'
 import { useLibrary } from '../context/LibraryContext'
 import { useAuth } from '../context/AuthContext'
@@ -28,7 +29,7 @@ export default function MangaDetail() {
   const [chaptersLoading, setChaptersLoading] = useState(true)
   const [chaptersError, setChaptersError] = useState('')
   const [slowServer, setSlowServer] = useState(false)
-  const { isLiked, toggleLike } = useLibrary()
+  const { isLiked, toggleLike, isChapterRead, mergeReadChapters } = useLibrary()
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -57,9 +58,14 @@ export default function MangaDetail() {
         if (!m) return
         setManga(m)
         void loadChapters(m.id)
+        // Ambil tanda baca dari backend (login saja; tamu pakai lokal).
+        if (user) {
+          fetchReadChapters(m.id).then(ids => mergeReadChapters(m.id, ids))
+        }
       })
       .catch(() => setLoading(false))
-  }, [slug])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, user?.id])
 
   // Saat cold start (>15 detik) beri tahu user bahwa server sedang dibangunkan.
   useEffect(() => {
@@ -132,15 +138,17 @@ export default function MangaDetail() {
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-general-300">
               <span className="flex items-center gap-1.5">
                 <EyeIcon className="h-4 w-4 text-general-400" />
-                {formatNumber(manga.views_count)} views
+                {formatNumber(displayViews(manga))} views
               </span>
               <span className="flex items-center gap-1.5">
                 <StarIcon className="h-4 w-4 text-primary-400" />
-                {manga.rating.toFixed(2)} ({formatNumber(manga.rating_count)})
+                {isShinigamiRating(manga)
+                  ? displayRating(manga).toFixed(1)
+                  : `${manga.rating.toFixed(2)} (${formatNumber(manga.rating_count)})`}
               </span>
               <span className="flex items-center gap-1.5">
                 <BookmarkFilledIcon className="h-4 w-4 text-primary-400" />
-                {formatNumber(manga.follows_count)}
+                {formatNumber(displayFollows(manga))}
               </span>
             </div>
 
@@ -255,18 +263,23 @@ export default function MangaDetail() {
             </p>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {orderedChapters.map(ch => (
-                <Link
-                  key={ch.id}
-                  to={`/manga/${manga.slug}/chapter/${ch.id}`}
-                  className="flex items-center justify-between rounded-lg border border-(--line) bg-(--card) px-4 py-3 text-sm transition hover:border-primary-500/40 hover:bg-(--card-2)"
-                >
-                  <span className="font-medium text-general-100">{ch.name}</span>
-                  <span className="text-xs text-general-400">
-                    {formatTimestamp(ch.release_timestamp)}
-                  </span>
-                </Link>
-              ))}
+              {orderedChapters.map(ch => {
+                const read = isChapterRead(manga.id, ch.id)
+                return (
+                  <Link
+                    key={ch.id}
+                    to={`/manga/${manga.slug}/chapter/${ch.id}`}
+                    className="flex items-center justify-between rounded-lg border border-(--line) bg-(--card) px-4 py-3 text-sm transition hover:border-primary-500/40 hover:bg-(--card-2)"
+                  >
+                    <span className={`font-medium ${read ? 'text-general-500' : 'text-general-100'}`}>
+                      {ch.name}
+                    </span>
+                    <span className="text-xs text-general-400">
+                      {formatTimestamp(ch.release_timestamp)}
+                    </span>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </section>

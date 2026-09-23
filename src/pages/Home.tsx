@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchHomeCollections } from '../api/library'
-import type { HomeCollections } from '../types'
+import type { HomeCollections, Manga } from '../types'
 import MangaCard from '../components/manga/MangaCard'
 import SectionTitle from '../components/ui/SectionTitle'
 import FilterTabs from '../components/ui/FilterTabs'
@@ -23,6 +23,10 @@ export default function Home() {
     return () => clearInterval(t)
   }, [])
 
+  // Slide hero: judul yang baru update + punya cover. (Hook harus di atas
+  // early-return agar jumlah hook konsisten tiap render.)
+  const hero = useMemo(() => (data?.updates ?? []).filter(m => m.cover_url).slice(0, 6), [data])
+
   if (!data) return <HomeSkeleton />
 
   const reco = data.recommendation[recoTab as keyof HomeCollections['recommendation']]
@@ -33,28 +37,7 @@ export default function Home() {
       {/* Banner */}
       <section className="mt-4 md:mt-8">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <a
-            href="#"
-            className="relative block aspect-16/10 overflow-hidden rounded-xl border border-(--line) bg-(--card) sm:aspect-16/7 lg:col-span-2 lg:aspect-16/5"
-          >
-            <img
-              src="https://placehold.co/1200x400/1a1a2e/6f39ee?text=Selamat+Datang+di+Tenshi.id"
-              alt="Banner"
-              className="h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-linear-to-r from-black/70 to-transparent" />
-            <div className="absolute inset-0 flex flex-col justify-center p-5 sm:p-6 md:p-10">
-              <span className="mb-1.5 w-fit rounded bg-primary-500 px-2 py-0.5 text-[11px] font-bold uppercase text-white sm:mb-2 sm:text-xs">
-                Terbaru
-              </span>
-              <h1 className="max-w-md font-display text-xl font-extrabold leading-tight text-white sm:text-2xl md:text-4xl">
-                Manga Library Digital Favoritmu
-              </h1>
-              <p className="mt-1.5 line-clamp-2 max-w-sm text-xs leading-relaxed text-white/80 sm:mt-2 sm:text-sm">
-                Baca manhwa, manga, dan manhua favorit secara gratis. Update setiap hari.
-              </p>
-            </div>
-          </a>
+          <HeroCarousel items={hero} />
 
           <aside className="rounded-xl border border-(--line) bg-(--card) p-4">
             <div className="mb-3 flex items-center justify-between">
@@ -183,6 +166,141 @@ function Announcement({ title, time, body }: { title: string; time: string; body
         <span className="text-[11px] text-general-400">{time}</span>
       </div>
       <p className="mt-1 text-xs leading-relaxed text-general-400">{body}</p>
+    </div>
+  )
+}
+
+// Badge "CHAPTER 71" dari nomor chapter terbaru (fallback: nama chapter).
+function heroBadge(m: Manga): string {
+  if (m.latest_chapter_number && m.latest_chapter_number > 0) return `Chapter ${m.latest_chapter_number}`
+  const name = m.latest_chapter?.name ?? ''
+  const hit = name.match(/chapter\s*([\d.]+)/i)
+  if (hit) return `Chapter ${hit[1]}`
+  return 'Update'
+}
+
+// Hero carousel ala situs baca modern: background blur + badge chapter +
+// cover + judul + genre + sinopsis + panah + strip thumbnail.
+function HeroCarousel({ items }: { items: Manga[] }) {
+  const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const count = items.length
+
+  useEffect(() => {
+    if (paused || count < 2) return
+    const t = setTimeout(() => setIndex(i => (i + 1) % count), 6000)
+    return () => clearTimeout(t)
+  }, [index, paused, count])
+
+  if (!count) return null
+  const m = items[index % count]
+  const genres = (m.genres ?? []).slice(0, 4).map(g => (typeof g === 'string' ? g : g.name))
+
+  return (
+    <div
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      className="relative flex min-h-80 overflow-hidden rounded-xl border border-(--line) bg-[#0b0b0d] sm:min-h-96 lg:col-span-2"
+    >
+      {/* Background blur per slide */}
+      {items.map((s, i) => (
+        <div
+          key={s.id}
+          aria-hidden={i !== index % count}
+          className={`absolute inset-0 transition-opacity duration-700 ${i === index % count ? 'opacity-100' : 'opacity-0'}`}
+        >
+          <img
+            src={s.banner_url || s.cover_url}
+            alt=""
+            loading={i === 0 ? 'eager' : 'lazy'}
+            className="h-full w-full scale-110 object-cover opacity-50 blur-2xl"
+          />
+          <div className="absolute inset-0 bg-linear-to-r from-black/90 via-black/60 to-black/30" />
+          <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 to-transparent" />
+        </div>
+      ))}
+
+      {/* Konten */}
+      <div className="relative flex w-full items-center gap-4 p-4 pb-16 sm:gap-6 sm:p-6 sm:pb-16 md:p-8 md:pb-16">
+        <Link to={`/manga/${m.slug}`} className="w-28 shrink-0 sm:w-40 md:w-48">
+          <img
+            src={m.cover_url}
+            alt={m.title}
+            className="aspect-[3/4] w-full rounded-lg object-cover shadow-2xl ring-1 ring-white/20"
+          />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <span className="inline-block rounded-full bg-primary-500 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white uppercase sm:text-xs">
+            {heroBadge(m)}
+          </span>
+          <Link to={`/manga/${m.slug}`}>
+            <h2 className="mt-2 line-clamp-2 font-display text-xl leading-tight font-extrabold text-white sm:text-2xl md:text-4xl">
+              {m.title}
+            </h2>
+          </Link>
+          {genres.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5 sm:mt-3 sm:gap-2">
+              {genres.map(g => (
+                <span
+                  key={g}
+                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-neutral-200 sm:px-3 sm:py-1 sm:text-xs"
+                >
+                  {g}
+                </span>
+              ))}
+            </div>
+          )}
+          {m.description && (
+            <p className="mt-2 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/80 sm:mt-3 sm:line-clamp-3 sm:text-sm">
+              {m.description}
+            </p>
+          )}
+          <Link
+            to={`/manga/${m.slug}`}
+            className="mt-3 inline-block rounded-lg bg-primary-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-primary-600 sm:mt-4 sm:text-sm"
+          >
+            Baca Sekarang
+          </Link>
+        </div>
+      </div>
+
+      {/* Panah */}
+      {count > 1 && (
+        <>
+          <button
+            onClick={() => setIndex((index - 1 + count) % count)}
+            aria-label="Sebelumnya"
+            className="absolute top-1/2 left-2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/40 text-lg text-white backdrop-blur transition hover:bg-primary-500"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => setIndex((index + 1) % count)}
+            aria-label="Berikutnya"
+            className="absolute top-1/2 right-2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/40 text-lg text-white backdrop-blur transition hover:bg-primary-500"
+          >
+            ›
+          </button>
+        </>
+      )}
+
+      {/* Strip thumbnail */}
+      {count > 1 && (
+        <div className="absolute bottom-3 left-1/2 flex max-w-full -translate-x-1/2 gap-2 overflow-x-auto rounded-xl border border-white/10 bg-black/50 px-2 py-1.5 backdrop-blur">
+          {items.map((s, i) => (
+            <button
+              key={s.id}
+              onClick={() => setIndex(i)}
+              aria-label={s.title}
+              className={`h-12 w-9 shrink-0 overflow-hidden rounded-md transition sm:h-14 sm:w-11 ${
+                i === index % count ? 'ring-2 ring-primary-500' : 'opacity-60 hover:opacity-100'
+              }`}
+            >
+              <img src={s.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

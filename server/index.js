@@ -25,8 +25,8 @@ if (!process.env.DATABASE_URL) {
   process.exit(1)
 }
 
-// Neon connection string — diurai supaya opsi seperti
-// channel_binding tidak merusak driver `pg`.
+// Connection string (Neon dulu, sekarang Supabase) — diurai supaya
+// opsi seperti channel_binding / pgbouncer tidak merusak driver `pg`.
 const parsed = new URL(process.env.DATABASE_URL)
 const pool = new pg.Pool({
   host: parsed.hostname,
@@ -36,6 +36,10 @@ const pool = new pg.Pool({
   database: parsed.pathname.slice(1),
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 10000,
+  // Supabase free Session Pooler cuma 15 koneksi total (backend Render +
+  // sync laptop + dashboard). Batasi backend biar tidak EMAXCONNSESSION.
+  max: Number(process.env.PG_POOL_MAX || 5),
+  idleTimeoutMillis: 30000,
 })
 
 const query = async (text, params) => {
@@ -1327,7 +1331,7 @@ ensureSchema()
     })
     server.on('listening', () => {
       console.log(`Tenshi.id server berjalan di http://localhost:${PORT}`)
-      console.log('Database Neon: OK (skema siap)')
+      console.log('Database: OK (skema siap)')
       console.log('Akun admin demo: admin@tenshi.id / admin123')
     })
   })

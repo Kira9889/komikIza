@@ -53,15 +53,38 @@ const pool = new pg.Pool({
   ssl: { rejectUnauthorized: false },
   connectionTimeoutMillis: 10000,
   statement_timeout: 30000,
+  // Supabase Session Pooler free cuma pool_size 15 untuk SEMUA koneksi
+  // (dashboard + backend + semua terminal sync). Batasi 1 proses sync
+  // cuma boleh pegang 3 koneksi biar tidak EMAXCONNSESSION.
+  max: 3,
 })
-const query = async (text, params) => (await pool.query(text, params)).rows
+async function query(text, params, retries = 5) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return (await pool.query(text, params)).rows
+    } catch (e) {
+      const msg = String(e?.message || '')
+      const retryable =
+        msg.includes('EMAXCONNSESSION') ||
+        msg.includes('max clients') ||
+        msg.includes('too many clients') ||
+        e?.code === '53300' ||
+        e?.code === '53400'
+      if (!retryable || attempt >= retries) throw e
+      await delay(1000 * (attempt + 1))
+    }
+  }
+}
 const delay = ms => new Promise(r => setTimeout(r, ms))
 const toIso = v => {
   const t = Date.parse(v || '')
   return Number.isNaN(t) ? null : new Date(t).toISOString()
 }
 // Paralelisasi unduhan pages (default 5, maks 16 via --workers=N).
+// --jobs=N: jumlah judul jalan bareng dalam 1 terminal (default 1, maks 4).
+// Contoh cepat 1 terminal: --jobs=3 --workers=5 (API ~15 paralel, DB tetap serial per judul).
 const workers = Math.max(1, Math.min(Number(args.workers || 5), 16))
+const jobs = Math.max(1, Math.min(Number(args.jobs || 1), 4))
 const isValidUuid = v =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''))
 
@@ -190,12 +213,12 @@ async function importCatalog() {
     shinigami_id: item.manga_id,
     alternative_names: String(item.alternative_title || '').split(',').map(n => n.trim()).filter(Boolean),
     tags: (item.taxonomy?.Genre || []).map(g => g.name).filter(Boolean),
-    shinigami_views: Number(item.view_count || 0),
-    shinigami_bookmarks: Number(item.bookmark_count || 0),
-    shinigami_rating: Number(item.user_rate || 0),
-    shinigami_rank: Number(item.rank ?? 9999),
+    shinigami_views: Math.trunc(Number(item.view_count || 0)) || 0,
+    shinigami_bookmarks: Math.trunc(Number(item.bookmark_count || 0)) || 0,
+    shinigami_rating: Number(item.user_rate || 0) || 0,
+    shinigami_rank: Math.trunc(Number(item.rank ?? 9999)) || 9999,
     shinigami_updated_at: toIso(item.updated_at),
-    latest_chapter_number: Number(item.latest_chapter_number || 0),
+    latest_chapter_number: Math.trunc(Number(item.latest_chapter_number || 0)) || 0,
     latest_chapter_time: toIso(item.latest_chapter_time),
   }))
   const result = await query(
@@ -254,9 +277,8 @@ async function main() {
   mangas = mangas.slice(offset, offset + limit)
   console.log(`Sync ${mangas.length} judul...`)
 
-  let chapterTotal = 0
-  let pageTotal = 0
-  for (const m of mangas) {
+  const stats = { chapterTotal: 0, pageTotal: 0 }
+  async function syncOne(m) {
     try {
       const payload = await shinigamiJson(
         `/v1/chapter/${encodeURIComponent(m.shinigami_id)}/list?page_size=3000`,
@@ -303,28 +325,41 @@ async function main() {
           [JSON.stringify(chaptersToSync)],
         )
       }
-      chapterTotal += chaptersToSync.length
+      stats.chapterTotal += chaptersToSync.length
 
       if (!args['skip-pages'] && chaptersToSync.length) {
         for (let i = 0; i < chaptersToSync.length; i += workers) {
           const batch = chaptersToSync.slice(i, i + workers)
           if (!batch.length) continue
-          const results = await Promise.allSettled(
+          // 1. Fetch API paralel (tidak pakai koneksi DB)
+          const fetched = await Promise.allSettled(
             batch.map(async c => {
               const detail = await shinigamiJson(`/v1/chapter/detail/${encodeURIComponent(c.id)}`)
               const pages = mapPages(detail)
                 .filter(p => isAllowedImage(p.imageUrl))
                 .map(p => ({ index: p.index, url: p.imageUrl }))
-              if (pages.length) {
-                await query('update chapters set pages = $1 where id = $2', [JSON.stringify(pages), c.id])
-              }
-              return pages.length
+              return { c, pages }
             }),
           )
-          results.forEach((r, bi) => {
-            if (r.status === 'fulfilled') pageTotal += r.value
-            else console.error(`  [${m.title}] pages ${batch[bi].name} gagal: ${r.reason?.message || r.reason}`)
-          })
+          // 2. Update DB serial satu-per-satu (hemat koneksi pool)
+          for (let bi = 0; bi < fetched.length; bi += 1) {
+            const r = fetched[bi]
+            if (r.status === 'fulfilled') {
+              stats.pageTotal += r.value.pages.length
+              if (r.value.pages.length) {
+                try {
+                  await query('update chapters set pages = $1 where id = $2', [
+                    JSON.stringify(r.value.pages),
+                    r.value.c.id,
+                  ])
+                } catch (e) {
+                  console.error(`  [${m.title}] pages ${batch[bi].name} gagal: ${e.message}`)
+                }
+              }
+            } else {
+              console.error(`  [${m.title}] pages ${batch[bi].name} gagal: ${r.reason?.message || r.reason}`)
+            }
+          }
           const done = Math.min(i + workers, chaptersToSync.length)
           if (done % 10 < workers) console.log(`  [${m.title}] ${done}/${chaptersToSync.length} chapter...`)
           await delay(200)
@@ -336,7 +371,13 @@ async function main() {
     }
     await delay(250)
   }
-  console.log(`Selesai. ${chapterTotal} chapter, ${pageTotal} halaman tersimpan.`)
+
+  // 1 terminal, N judul jalan bareng — tetap 1 pool (max 3) jadi aman dari EMAXCONNSESSION.
+  for (let i = 0; i < mangas.length; i += jobs) {
+    const group = mangas.slice(i, i + jobs)
+    await Promise.all(group.map(syncOne))
+  }
+  console.log(`Selesai. ${stats.chapterTotal} chapter, ${stats.pageTotal} halaman tersimpan.`)
   await pool.end()
 }
 

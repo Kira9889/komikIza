@@ -7,6 +7,8 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { OAuth2Client } from 'google-auth-library'
 import nodemailer from 'nodemailer'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import { randomInt } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -24,6 +26,16 @@ if (!process.env.DATABASE_URL) {
   console.error('ERROR: variabel DATABASE_URL belum diisi. Salin server/.env.example menjadi server/.env lalu isi.')
   process.exit(1)
 }
+
+// Jangan pernah jalan di production dengan JWT_SECRET default — token bisa dipalsukan.
+// Render otomatis menyetel RENDER_EXTERNAL_URL, jadi ini kepicu di sana kalau lupa isi.
+const DEV_JWT = 'tenshi-dev-secret-change-me'
+const isProdLike = process.env.NODE_ENV === 'production' || !!process.env.RENDER_EXTERNAL_URL
+if ((!process.env.JWT_SECRET || JWT_SECRET === DEV_JWT) && isProdLike) {
+  console.error('ERROR: JWT_SECRET masih default. Isi JWT_SECRET di Render > Environment dengan string acak panjang, lalu redeploy.')
+  process.exit(1)
+}
+if (JWT_SECRET === DEV_JWT) console.warn('[security] JWT_SECRET masih default — JANGAN dipakai di production.')
 
 // Connection string (Neon dulu, sekarang Supabase) — diurai supaya
 // opsi seperti channel_binding / pgbouncer tidak merusak driver `pg`.
@@ -486,9 +498,60 @@ async function setLinks(mangaId, genreNames, authorNames) {
 // App
 // ---------------------------------------------------------------
 const app = express()
-app.use(cors())
+
+// Render jalan di belakang proxy — wajib agar rate-limit membaca IP asli user,
+// bukan IP proxy (kalau tidak, 1 IP proxy = 1 jatah untuk SEMUA user).
+app.set('trust proxy', 1)
+
+app.use(helmet({
+  // Backend hanya API + gambar: matikan CSP (tidak serve HTML) dan izinkan
+  // <img> lintas origin (frontend tenshi.my.id me-load gambar dari api.tenshi.my.id).
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}))
+
+// CORS: hanya origin milik sendiri (+ localhost saat dev). Request tanpa
+// Origin (curl, Worker keep-alive) tetap diizinkan.
+const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'https://tenshi.my.id,https://www.tenshi.my.id,https://komikiza.pages.dev')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean)
+const DEV_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5001']
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true)
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
+    if (!isProdLike && DEV_ORIGINS.includes(origin)) return cb(null, true)
+    return cb(new Error('Origin tidak diizinkan'))
+  },
+}))
+
+// Anti brute-force / spam. Catatan: /api/shinigami/image + /api/health
+// dikecualikan (reader me-load puluhan gambar per chapter; health diping
+// keep-alive tiap 5 menit).
+const tooMany = { error: 'Terlalu banyak percobaan. Tunggu ±10 menit.' }
+const authLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
+const codeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 15, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
+const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: tooMany,
+  skip: req => req.path === '/api/health' || req.path === '/api/shinigami/image',
+})
+app.use('/api/', apiLimiter)
+
 app.use(compression())
 app.use(express.json({ limit: '2mb' }))
+
+// Pesan error aman: pesan buatan sendiri (err.status diset) boleh ke user,
+// error sistem (DB/driver) JANGAN diteruskan — bocorin struktur internal.
+function friendlyError(e, fallback) {
+  return e && e.status ? e.message : fallback
+}
 
 // ---------------------------------------------------------------
 // In-Memory Cache untuk performa instan (< 5ms)
@@ -580,7 +643,7 @@ app.get('/api/shinigami/chapter/:chapterId/pages', async (req, res) => {
     res.json(pages)
   } catch (e) {
     console.error(e)
-    res.status(502).json({ error: e.message || 'Gagal mengambil halaman chapter' })
+    res.status(502).json({ error: friendlyError(e, 'Gagal mengambil halaman chapter') })
   }
 })
 
@@ -604,24 +667,24 @@ app.get('/api/shinigami/image', async (req, res) => {
     res.send(Buffer.from(await upstream.arrayBuffer()))
   } catch (e) {
     console.error(e)
-    res.status(502).json({ error: e.message || 'Gagal memuat gambar' })
+    res.status(502).json({ error: friendlyError(e, 'Gagal memuat gambar') })
   }
 })
 
-app.post('/api/admin/shinigami/import', requireAuth, requireAdmin, async (_req, res) => {
+app.post('/api/admin/shinigami/import', importLimiter, requireAuth, requireAdmin, async (_req, res) => {
   try {
     const r = await importShinigamiCatalog()
     invalidateMangaCache()
     res.json(r)
   } catch (e) {
     console.error(e)
-    res.status(502).json({ error: e.message || 'Gagal mengimpor katalog Shinigami' })
+    res.status(502).json({ error: friendlyError(e, 'Gagal mengimpor katalog Shinigami') })
   }
 })
 
 // ---------------- AUTH ----------------
 // Pendaftaran khusus Gmail: buat akun (belum aktif) lalu kirim kode verifikasi.
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { email, username, password } = req.body || {}
     if (!email || !username || !password) return res.status(400).json({ error: 'Semua field wajib diisi' })
@@ -664,12 +727,12 @@ app.post('/api/auth/register', async (req, res) => {
     )
   } catch (e) {
     console.error(e)
-    res.status(e.status || 500).json({ error: e.message || 'Gagal mendaftar' })
+    res.status(e.status || 500).json({ error: friendlyError(e, 'Gagal mendaftar') })
   }
 })
 
 // Verifikasi kode 6 digit → akun aktif + langsung login (dapat token).
-app.post('/api/auth/verify-email', async (req, res) => {
+app.post('/api/auth/verify-email', codeLimiter, async (req, res) => {
   try {
     const { email, code } = req.body || {}
     if (!email || !code) return res.status(400).json({ error: 'Email dan kode wajib diisi' })
@@ -700,12 +763,12 @@ app.post('/api/auth/verify-email', async (req, res) => {
     res.json({ token: signToken(user), user: publicUser(user) })
   } catch (e) {
     console.error(e)
-    res.status(e.status || 500).json({ error: e.message || 'Gagal verifikasi' })
+    res.status(e.status || 500).json({ error: friendlyError(e, 'Gagal verifikasi') })
   }
 })
 
 // Kirim ulang kode (ada jeda 60 detik anti-spam).
-app.post('/api/auth/resend-code', async (req, res) => {
+app.post('/api/auth/resend-code', codeLimiter, async (req, res) => {
   try {
     const { email } = req.body || {}
     if (!email) return res.status(400).json({ error: 'Email wajib diisi' })
@@ -727,11 +790,11 @@ app.post('/api/auth/resend-code', async (req, res) => {
     res.json({ ok: true, email: mail, emailSent: result.sent, devCode: result.devCode })
   } catch (e) {
     console.error(e)
-    res.status(e.status || 500).json({ error: e.message || 'Gagal mengirim kode' })
+    res.status(e.status || 500).json({ error: friendlyError(e, 'Gagal mengirim kode') })
   }
 })
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {}
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' })
@@ -766,7 +829,7 @@ app.get('/api/auth/google/url', (req, res) => {
 })
 
 // Callback: tukar code Google → verifikasi → buat/tautkan akun → token JWT.
-app.post('/api/auth/google', async (req, res) => {
+app.post('/api/auth/google', authLimiter, async (req, res) => {
   try {
     const client = getGoogleClient()
     if (!client) return res.status(500).json({ error: 'Login Google belum dikonfigurasi di server.' })
@@ -1314,6 +1377,17 @@ app.get('/api/me/read-chapters', requireAuth, async (req, res) => {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengambil chapter dibaca' })
   }
+})
+
+// CORS error yang rapi (default Express: 500 HTML).
+// Harus di bawah semua route agar menangkap error dari middleware CORS.
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  if (err && err.message === 'Origin tidak diizinkan') {
+    return res.status(403).json({ error: 'Origin tidak diizinkan' })
+  }
+  console.error(err)
+  return res.status(500).json({ error: 'Terjadi kesalahan server' })
 })
 
 // ---------------------------------------------------------------

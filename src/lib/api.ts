@@ -103,29 +103,40 @@ export async function apiFetch<T = any>(
   return (await res.json()) as T
 }
 
-// Cek apakah backend aktif (dicache agar hanya dicek sekali per sesi).
+// Cek apakah backend aktif. Hasil "online" dicache seumur sesi, tapi
+// hasil "offline" (mis. Render lagi cold start) dicoba lagi setelah
+// ONLINE_RETRY_MS — sebelumnya sekali gagal = offline selamanya satu sesi,
+// jadi web tidak pernah "bangun" walau backend sudah nyala.
 let onlineChecked = false
 let onlineState = false
+let lastCheck = 0
+const ONLINE_RETRY_MS = 20_000
+const ONLINE_TIMEOUT_MS = 10_000
 
 export function isBackendOnline(): Promise<boolean> {
-  if (onlineChecked) return Promise.resolve(onlineState)
+  if (onlineChecked && (onlineState || Date.now() - lastCheck < ONLINE_RETRY_MS)) {
+    return Promise.resolve(onlineState)
+  }
   return new Promise(resolve => {
     const ctrl = new AbortController()
     const timer = setTimeout(() => {
       ctrl.abort()
       onlineChecked = true
       onlineState = false
+      lastCheck = Date.now()
       resolve(false)
-    }, 3000)
+    }, ONLINE_TIMEOUT_MS)
     fetch(API_BASE + '/health', { signal: ctrl.signal })
       .then(r => {
         onlineChecked = true
         onlineState = r.ok
+        lastCheck = Date.now()
         resolve(r.ok)
       })
       .catch(() => {
         onlineChecked = true
         onlineState = false
+        lastCheck = Date.now()
         resolve(false)
       })
       .finally(() => clearTimeout(timer))
@@ -135,4 +146,5 @@ export function isBackendOnline(): Promise<boolean> {
 export function resetOnlineCache() {
   onlineChecked = false
   onlineState = false
+  lastCheck = 0
 }

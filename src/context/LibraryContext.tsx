@@ -97,35 +97,48 @@ function loadLocalReadMap(key: string): Record<string, string[]> {
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const storageKey = useMemo(() => `tenshi_likes_${user?.id ?? 'guest'}`, [user?.id])
-  const historyKey = useMemo(() => `tenshi_history_${user?.id ?? 'guest'}`, [user?.id])
-  const readKey = useMemo(() => `tenshi_read_${user?.id ?? 'guest'}`, [user?.id])
+  const userId = user?.id ?? 'guest'
+  const storageKey = useMemo(() => `tenshi_likes_${userId}`, [userId])
+  const historyKey = useMemo(() => `tenshi_history_${userId}`, [userId])
+  const readKey = useMemo(() => `tenshi_read_${userId}`, [userId])
 
   const [likedIds, setLikedIds] = useState<string[]>(() => loadLocal(storageKey))
   const [history, setHistory] = useState<HistoryEntry[]>(() => loadLocalHistory(historyKey))
   const [readMap, setReadMap] = useState<Record<string, string[]>>(() => loadLocalReadMap(readKey))
 
+  // User yang datanya sedang dipegang state. Mencegah efek simpan di bawah
+  // menulis data user lama (mis. guest) ke slot user baru sebelum
+  // sinkronisasi selesai — itu yang bikin data sehabis login telat/ketukar.
+  const loadedUserRef = useRef<string>(userId)
+
   // Simpan ke localStorage sebagai cache/mirror
   useEffect(() => {
+    if (loadedUserRef.current !== userId) return
     localStorage.setItem(storageKey, JSON.stringify(likedIds))
-  }, [likedIds, storageKey])
+  }, [likedIds, storageKey, userId])
 
   useEffect(() => {
+    if (loadedUserRef.current !== userId) return
     try {
       const entries = Object.entries(readMap).slice(-100)
       localStorage.setItem(readKey, JSON.stringify(Object.fromEntries(entries)))
     } catch {
       /* abaikan */
     }
-  }, [readMap, readKey])
+  }, [readMap, readKey, userId])
 
   useEffect(() => {
+    if (loadedUserRef.current !== userId) return
     localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 100)))
-  }, [history, historyKey])
+  }, [history, historyKey, userId])
 
-  // Saat user berubah: ambil favorit + riwayat dari backend (jika online),
-  // atau dari localStorage (jika offline / tamu).
+  // Saat user berubah: tampilkan cache lokal user itu SEKEITKA (tanpa
+  // menunggu network), lalu segarkan favorit + riwayat dari backend.
   useEffect(() => {
+    setLikedIds(loadLocal(storageKey))
+    setHistory(loadLocalHistory(historyKey))
+    setReadMap(loadLocalReadMap(readKey))
+    loadedUserRef.current = userId
     let cancelled = false
     ;(async () => {
       const online = await isBackendOnline()
@@ -139,22 +152,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
             setLikedIds(likes.ids)
             setHistory(hist)
           }
-          return
         } catch {
-          /* lanjut ke fallback lokal */
+          /* tetap pakai cache lokal */
         }
-      }
-      if (!cancelled) {
-        setLikedIds(loadLocal(storageKey))
-        setHistory(loadLocalHistory(historyKey))
-        setReadMap(loadLocalReadMap(readKey))
       }
     })()
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [userId])
 
   const toggleLike = (id: string) => {
     setLikedIds(prev => {

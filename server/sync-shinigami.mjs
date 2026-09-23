@@ -88,18 +88,26 @@ const jobs = Math.max(1, Math.min(Number(args.jobs || 1), 4))
 const isValidUuid = v =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''))
 
-async function shinigamiJson(path) {
-  const res = await fetch(`${SHINIGAMI_API_URL}${path}`, {
-    headers: {
-      Accept: 'application/json',
-      Origin: SHINIGAMI_ORIGIN,
-      Referer: `${SHINIGAMI_ORIGIN}/`,
-      'User-Agent': BROWSER_UA,
-    },
-    signal: AbortSignal.timeout(30_000),
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status} untuk ${path}`)
-  return res.json()
+async function shinigamiJson(path, retries = 6) {
+  for (let attempt = 0; ; attempt += 1) {
+    const res = await fetch(`${SHINIGAMI_API_URL}${path}`, {
+      headers: {
+        Accept: 'application/json',
+        Origin: SHINIGAMI_ORIGIN,
+        Referer: `${SHINIGAMI_ORIGIN}/`,
+        'User-Agent': BROWSER_UA,
+      },
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (res.ok) return res.json()
+    // 429 / 5xx = rate-limit sementara → tunggu lalu coba lagi (hormati Retry-After).
+    const retryable = res.status === 429 || res.status >= 500
+    if (!retryable || attempt >= retries) throw new Error(`HTTP ${res.status} untuk ${path}`)
+    const retryAfter = Number(res.headers.get('retry-after') || 0)
+    const wait = retryAfter > 0 ? retryAfter * 1000 : Math.min(5000 * (attempt + 1), 30000)
+    console.log(`  rate-limit HTTP ${res.status} ${path} — tunggu ${Math.round(wait / 1000)}s...`)
+    await delay(wait)
+  }
 }
 
 function mapChapters(mangaId, payload) {

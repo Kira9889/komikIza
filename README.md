@@ -29,11 +29,6 @@ Setelah backend direstart, kolom sumber dibuat otomatis. Saat halaman detail ata
 
 Untuk menambahkan seluruh katalog sumber, gunakan tombol **Impor Shinigami** pada Admin → Buku. Impor menyimpan metadata semua judul dan menghubungkan judul lokal dengan nama yang sama; daftar chapter tiap judul lalu tersinkron ketika halaman judul atau admin chapter dibuka.
 
-## Akun demo admin
-
-| Email | Password | Role |
-|-------|----------|------|
-| admin@tenshi.id | admin123 | admin |
 
 Setiap user yang mendaftar otomatis ber-role `user` (hanya bisa baca, register, dan simpan favorit).
 

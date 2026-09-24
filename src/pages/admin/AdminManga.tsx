@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchMangaList, saveManga, removeManga, importShinigamiCatalog } from '../../api/library'
-import type { Manga, MangaInput, MangaType, MangaStatus } from '../../types'
+import { fetchMangaList, saveManga, removeManga, importShinigamiCatalog, listGenres } from '../../api/library'
+import type { Manga, MangaInput, MangaType, MangaStatus, Genre } from '../../types'
 import { PlusIcon, EditIcon, TrashIcon } from '../../icons'
 
 const emptyForm: MangaInput = {
@@ -295,6 +295,31 @@ function MangaForm({
   onClose: () => void
   onSave: (e: React.FormEvent) => void
 }) {
+  const [allGenres, setAllGenres] = useState<Genre[]>([])
+  const [newGenre, setNewGenre] = useState('')
+
+  useEffect(() => {
+    listGenres().then(setAllGenres).catch(() => {})
+  }, [])
+
+  const toggleGenre = (name: string) => {
+    set({
+      genreNames: form.genreNames.includes(name)
+        ? form.genreNames.filter(g => g !== name)
+        : [...form.genreNames, name],
+    })
+  }
+
+  const addNewGenre = () => {
+    const name = newGenre.trim()
+    if (!name) return
+    if (!form.genreNames.includes(name)) toggleGenre(name)
+    if (!allGenres.some(g => g.name.toLowerCase() === name.toLowerCase())) {
+      setAllGenres(prev => [...prev, { id: `tmp-${Date.now()}`, name }].sort((a, b) => a.name.localeCompare(b.name)))
+    }
+    setNewGenre('')
+  }
+
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
@@ -367,8 +392,43 @@ function MangaForm({
             <Field label="Pengarang (koma)">
               <input className="input-manga" value={form.authorNames.join(', ')} onChange={e => set({ authorNames: splitLines(e.target.value) })} placeholder="Nama pengarang, artist" />
             </Field>
-            <Field label="Genre (koma)">
-              <input className="input-manga" value={form.genreNames.join(', ')} onChange={e => set({ genreNames: splitLines(e.target.value) })} placeholder="Action, Fantasy" />
+            <Field label={`Genre (${form.genreNames.length} dipilih)`}>
+              <div className="flex flex-wrap gap-1.5">
+                {allGenres.map(g => {
+                  const active = form.genreNames.includes(g.name)
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => toggleGenre(g.name)}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        active
+                          ? 'border-primary-500 bg-primary-500 text-white'
+                          : 'border-(--line) bg-(--card-2) text-general-300 hover:border-primary-500 hover:text-primary-500'
+                      }`}
+                    >
+                      {g.name}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <input
+                  className="input-manga"
+                  value={newGenre}
+                  onChange={e => setNewGenre(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addNewGenre()
+                    }
+                  }}
+                  placeholder="Genre baru… (Enter)"
+                />
+                <button type="button" onClick={addNewGenre} className="btn-ghost shrink-0 rounded-lg px-3 text-sm font-semibold">
+                  Tambah
+                </button>
+              </div>
             </Field>
           </div>
 

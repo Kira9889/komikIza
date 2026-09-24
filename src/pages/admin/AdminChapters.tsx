@@ -69,9 +69,14 @@ export default function AdminChapters() {
   }
 
   const addPage = () => {
-    const url = pageUrl.trim()
-    if (!url) return
-    setPages(prev => [...prev, { id: `pg-${Date.now()}-${prev.length}`, url: toDriveImage(url) }])
+    // Dukung tempel banyak URL sekaligus (1 baris = 1 gambar).
+    const urls = pageUrl.split(/[\s\n]+/).map(u => u.trim()).filter(Boolean)
+    if (!urls.length) return
+    const base = Date.now()
+    setPages(prev => [
+      ...prev,
+      ...urls.map((url, i) => ({ id: `pg-${base}-${prev.length + i}`, url: toDriveImage(url) })),
+    ])
     setPageUrl('')
   }
 
@@ -228,8 +233,14 @@ export default function AdminChapters() {
               sebagai gambar. Link lainnya langsung dipakai apa adanya.
             </p>
             <div className="mb-3 flex gap-2">
-              <input value={pageUrl} onChange={e => setPageUrl(e.target.value)} placeholder="https://…/gambar-halaman.jpg" className="input-manga" />
-              <button onClick={addPage} className="btn-ghost shrink-0 rounded-lg px-3 text-sm font-semibold">Tambah</button>
+              <textarea
+                value={pageUrl}
+                onChange={e => setPageUrl(e.target.value)}
+                placeholder={'https://…/gambar-halaman.jpg\nTempel banyak URL sekaligus, 1 baris 1 gambar'}
+                rows={3}
+                className="input-manga"
+              />
+              <button onClick={addPage} className="btn-ghost shrink-0 self-start rounded-lg px-3 py-2 text-sm font-semibold">Tambah</button>
             </div>
 
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">

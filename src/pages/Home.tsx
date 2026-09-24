@@ -194,7 +194,7 @@ function HeroCarousel({ items }: { items: Manga[] }) {
 
   if (!count) return null
   const m = items[index % count]
-  const genres = (m.genres ?? []).slice(0, 4).map(g => (typeof g === 'string' ? g : g.name))
+  const genres = (m.genres ?? []).map(g => (typeof g === 'string' ? g : g.name))
 
   return (
     <div

@@ -1226,11 +1226,16 @@ app.post('/api/manga/:mangaId/chapters', requireAuth, requireAdmin, async (req, 
     if (!isValidUuid(mangaId)) return res.status(400).json({ error: 'ID tidak valid' })
     const b = req.body || {}
     if (!b.name) return res.status(400).json({ error: 'Nama chapter wajib diisi' })
-    const count = await query('select count(*)::int as n from chapters where manga_id = $1', [mangaId])
+    // Tolak nama ganda (sumber duplikat "Chapter 9" yang diklik Simpan berulang).
+    const dup = await query('select id from chapters where manga_id = $1 and name = $2', [mangaId, b.name])
+    if (dup[0]) return res.status(400).json({ error: 'Chapter dengan nama itu sudah ada' })
+    // Selalu taruh paling akhir (max+1 tahan hapus, tidak tabrakan dengan
+    // skema nomor impor yang besar).
+    const maxRow = await query('select coalesce(max(sort_order), 0)::int as m from chapters where manga_id = $1', [mangaId])
     const rows = await query(
       `insert into chapters (manga_id, name, type, sort_order, release_timestamp, pages, pdf_url)
        values ($1, $2, $3, $4, $5, $6, $7) returning id`,
-      [mangaId, b.name, 'chapter', count[0].n + 1, Math.floor(Date.now() / 1000), JSON.stringify(b.pages || []), b.pdf_url || null],
+      [mangaId, b.name, 'chapter', maxRow[0].m + 1, Math.floor(Date.now() / 1000), JSON.stringify(b.pages || []), b.pdf_url || null],
     )
     res.json({ id: rows[0].id })
   } catch (e) {

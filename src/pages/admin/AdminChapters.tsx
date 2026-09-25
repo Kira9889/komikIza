@@ -16,6 +16,8 @@ export default function AdminChapters() {
   const [pdfUrl, setPdfUrl] = useState('')
   const [pages, setPages] = useState<Screen[]>([])
   const [pageUrl, setPageUrl] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
     fetchMangaList().then(list => {
@@ -65,6 +67,7 @@ export default function AdminChapters() {
     setPdfUrl('')
     setPages([])
     setPageUrl('')
+    setFormError('')
     setOpen(true)
   }
 
@@ -81,10 +84,19 @@ export default function AdminChapters() {
   }
 
   const save = async () => {
-    if (!name.trim()) return
-    await saveChapter(selectedId, { id: editing?.id, name, pages, pdf_url: toDrivePreview(pdfUrl) })
-    setChapters(await fetchChapters(selectedId))
-    setOpen(false)
+    if (!name.trim() || saving) return
+    setSaving(true)
+    setFormError('')
+    try {
+      await saveChapter(selectedId, { id: editing?.id, name, pages, pdf_url: toDrivePreview(pdfUrl) })
+      setChapters(await fetchChapters(selectedId))
+      setOpen(false)
+    } catch (e: any) {
+      // Sebelumnya gagal disimpan diam-diam → user klik Simpan berulang → duplikat.
+      setFormError(e?.message || 'Gagal menyimpan chapter')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const remove = async (id: string) => {
@@ -166,7 +178,7 @@ export default function AdminChapters() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
-                      <button onClick={() => { setEditing(ch); setName(ch.name); setPdfUrl(ch.pdf_url ?? ''); setPages([...ch.pages]); setPageUrl(''); setOpen(true); }} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 hover:border-primary-500 hover:text-primary-500" aria-label="Edit">
+                      <button onClick={() => { setEditing(ch); setName(ch.name); setPdfUrl(ch.pdf_url ?? ''); setPages([...ch.pages]); setPageUrl(''); setFormError(''); setOpen(true); }} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 hover:border-primary-500 hover:text-primary-500" aria-label="Edit">
                         <EditIcon className="h-4 w-4" />
                       </button>
                       <button onClick={() => remove(ch.id)} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-red-400 hover:border-red-500" aria-label="Hapus">
@@ -259,9 +271,18 @@ export default function AdminChapters() {
               ))}
             </div>
 
+            {formError && (
+              <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{formError}</p>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <button onClick={() => setOpen(false)} className="btn-ghost rounded-lg px-4 py-2 text-sm font-semibold">Batal</button>
-              <button onClick={save} className="btn-primary rounded-lg px-5 py-2 text-sm font-semibold">Simpan</button>
+              <button
+                onClick={save}
+                disabled={saving}
+                className="btn-primary rounded-lg px-5 py-2 text-sm font-semibold disabled:cursor-wait disabled:opacity-60"
+              >
+                {saving ? 'Menyimpan…' : 'Simpan'}
+              </button>
             </div>
           </div>
         </div>

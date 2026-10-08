@@ -188,16 +188,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithGoogle = async (code: string): Promise<AuthResult> => {
     if (!code) return { error: 'Kode Google tidak ada.' }
+    // Backend gratis butuh ±1 menit untuk bangun dari tidur — jangan gantung
+    // selamanya, tapi kasih jendela cukup lebar + pesan yang jelas.
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 90_000)
     try {
       const res = await apiFetch<AuthResponse>('/auth/google', {
         method: 'POST',
         body: JSON.stringify({ code }),
+        signal: ctrl.signal,
       })
       setToken(res.token)
       persist(res.user)
       return {}
     } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        return { error: 'Server terlalu lama merespons (kemungkinan sedang aktif dari mode tidur). Tunggu sebentar lalu coba lagi.' }
+      }
       return { error: e.message || 'Login Google gagal. Coba lagi.' }
+    } finally {
+      clearTimeout(timer)
     }
   }
 

@@ -214,3 +214,24 @@ create index if not exists idx_comments_manga_created on public.comments(manga_i
 alter table public.comments add column if not exists chapter_id uuid references public.chapters(id) on delete cascade;
 create index if not exists idx_comments_manga_chapter on public.comments(manga_id, chapter_id, created_at desc);
 
+-- ------------------------------------------------------------
+-- RLS: kunci API bawaan Supabase (PostgREST). Aplikasi hanya lewat
+-- backend Express (koneksi owner, tidak kena RLS), jadi tanpa policy =
+-- tolak SEMUA akses langsung via anon key. Tanpa ini, siapa pun yang
+-- pegang anon key bisa dump tabel members (email + hash password!)
+-- lewat REST API Supabase.
+-- JANGAN pakai FORCE — backend owner harus tetap bypass.
+-- ------------------------------------------------------------
+alter table public.members enable row level security;
+alter table public.email_verification_codes enable row level security;
+alter table public.manga enable row level security;
+alter table public.genres enable row level security;
+alter table public.manga_genres enable row level security;
+alter table public.authors enable row level security;
+alter table public.manga_authors enable row level security;
+alter table public.chapters enable row level security;
+alter table public.likes enable row level security;
+alter table public.history enable row level security;
+alter table public.read_chapters enable row level security;
+alter table public.comments enable row level security;
+

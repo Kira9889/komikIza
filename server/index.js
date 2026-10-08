@@ -138,6 +138,7 @@ async function getMailer() {
 }
 // Cek konfigurasi sinkron (untuk flag UI) — pengiriman tetap async.
 function hasSmtpConfig() {
+  if (process.env.RESEND_API_KEY) return true
   const { SMTP_HOST, SMTP_USER, SMTP_PASS } = process.env
   return !!(SMTP_HOST && SMTP_USER && SMTP_PASS)
 }
@@ -160,6 +161,37 @@ async function createCode(email) {
 }
 
 async function sendCodeEmail(email, code) {
+  // Jalur 1 (disarankan di hosting): Resend HTTP API — tidak pakai port SMTP
+  // sama sekali, jadi lolos filter egress Render. Daftar di resend.com,
+  // verifikasi domain, isi RESEND_API_KEY (+ RESEND_FROM opsional).
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const from = process.env.RESEND_FROM || 'Tenshi.id <noreply@tenshi.my.id>'
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from,
+          to: email,
+          subject: `Kode verifikasi Tenshi.id: ${code}`,
+          html: `<div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #eee;border-radius:12px">
+        <h2 style="margin:0 0 8px">Tenshi<span style="color:#6f39ee">.id</span></h2>
+        <p>Kode verifikasi kamu:</p>
+        <p style="font-size:32px;font-weight:800;letter-spacing:8px;margin:8px 0">${code}</p>
+        <p style="color:#888;font-size:13px">Berlaku 10 menit. Jangan bagikan ke siapa pun.</p>
+      </div>`,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      })
+      if (!res.ok) throw new Error(`Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`)
+      return { sent: true }
+    } catch (e) {
+      console.error('[verifikasi] Resend gagal:', e.message)
+    }
+  }
   const mail = await getMailer()
   if (mail) {
     const from = process.env.SMTP_FROM || process.env.SMTP_USER

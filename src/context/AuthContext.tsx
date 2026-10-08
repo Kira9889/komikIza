@@ -24,6 +24,7 @@ interface AuthContextValue {
   resendCode: (email: string) => Promise<AuthResult>
   updateUsername: (username: string) => Promise<AuthResult>
   uploadAvatar: (file: File) => Promise<AuthResult>
+  changePassword: (current: string, next: string) => Promise<AuthResult>
   logout: () => Promise<void>
 }
 
@@ -284,13 +285,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const changePassword = async (current: string, next: string): Promise<AuthResult> => {
+    if (!user) return { error: 'Harus login' }
+    if (next.length < 6) return { error: 'Password baru minimal 6 karakter' }
+    try {
+      await apiFetch('/me/password', {
+        method: 'PUT',
+        body: JSON.stringify({ current, next }),
+      })
+      return {}
+    } catch (e: any) {
+      return { error: e.message || 'Gagal mengganti password' }
+    }
+  }
+
   const logout = async () => {
     setToken(null)
     persist(null)
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, register, login, loginWithGoogle, verifyEmail, resendCode, updateUsername, uploadAvatar, logout }}>
+    <AuthContext.Provider value={{ user, loading, register, login, loginWithGoogle, verifyEmail, resendCode, updateUsername, uploadAvatar, changePassword, logout }}>
       {children}
     </AuthContext.Provider>
   )

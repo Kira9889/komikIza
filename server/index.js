@@ -978,6 +978,29 @@ app.put('/api/me/username', requireAuth, async (req, res) => {
   }
 })
 
+// Ganti password sendiri (login wajib).
+app.put('/api/me/password', authLimiter, requireAuth, async (req, res) => {
+  try {
+    const current = String((req.body || {}).current || '')
+    const next = String((req.body || {}).next || '')
+    if (!current || !next) return res.status(400).json({ error: 'Password lama dan baru wajib diisi' })
+    if (next.length < 6) return res.status(400).json({ error: 'Password baru minimal 6 karakter' })
+    if (next === current) return res.status(400).json({ error: 'Password baru sama dengan yang lama' })
+    const rows = await query('select password_hash from members where id = $1', [req.user.id])
+    if (!rows[0]?.password_hash) {
+      return res.status(400).json({ error: 'Akun ini memakai Login with Google (tidak punya password).' })
+    }
+    const ok = await bcrypt.compare(current, rows[0].password_hash)
+    if (!ok) return res.status(401).json({ error: 'Password lama salah' })
+    const hash = await bcrypt.hash(next, 10)
+    await query('update members set password_hash = $1 where id = $2', [hash, req.user.id])
+    res.json({ ok: true })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengganti password' })
+  }
+})
+
 // Foto profil sendiri (login wajib). Disimpan ke R2: avatars/<userId>.<ext>.
 // Syarat R2_* di env sama seperti impor R2 (server/.env).
 const AVATAR_MIMES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }

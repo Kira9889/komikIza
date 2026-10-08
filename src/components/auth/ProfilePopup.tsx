@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { CloseIcon, EditIcon, UserIcon } from '../../icons'
 
 export default function ProfilePopup({ onClose }: { onClose: () => void }) {
-  const { user, logout, updateUsername, uploadAvatar } = useAuth()
+  const { user, logout, updateUsername, uploadAvatar, changePassword } = useAuth()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
@@ -12,6 +12,12 @@ export default function ProfilePopup({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [showPw, setShowPw] = useState(false)
+  const [pwCur, setPwCur] = useState('')
+  const [pwNew, setPwNew] = useState('')
+  const [pwConf, setPwConf] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwMsg, setPwMsg] = useState('')
 
   if (!user) return null
 
@@ -54,6 +60,26 @@ export default function ProfilePopup({ onClose }: { onClose: () => void }) {
     const res = await uploadAvatar(file)
     setUploading(false)
     if (res.error) setError(res.error)
+  }
+
+  const savePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPwMsg('')
+    if (pwNew !== pwConf) {
+      setPwMsg('Konfirmasi password tidak sama')
+      return
+    }
+    setPwBusy(true)
+    const res = await changePassword(pwCur, pwNew)
+    setPwBusy(false)
+    if (res.error) {
+      setPwMsg(res.error)
+      return
+    }
+    setPwMsg('OK: password diganti')
+    setPwCur('')
+    setPwNew('')
+    setPwConf('')
   }
 
   return (
@@ -164,7 +190,62 @@ export default function ProfilePopup({ onClose }: { onClose: () => void }) {
           {user.role}
         </span>
 
-        <div className="mt-5 space-y-2">
+        <div className="mt-5 space-y-2 border-t border-(--line) pt-4">
+          <button
+            onClick={() => {
+              setShowPw(v => !v)
+              setPwMsg('')
+            }}
+            className="btn-ghost w-full rounded-lg px-4 py-2 text-sm font-semibold"
+          >
+            {showPw ? 'Tutup ganti password' : 'Ganti password'}
+          </button>
+          {showPw && (
+            <form onSubmit={savePassword} className="space-y-2 rounded-lg border border-(--line) bg-(--card-2) p-3">
+              {pwMsg && (
+                <p
+                  className={`rounded-lg border px-3 py-1.5 text-xs ${
+                    pwMsg.startsWith('OK')
+                      ? 'border-green-500/40 bg-green-500/10 text-green-400'
+                      : 'border-red-500/40 bg-red-500/10 text-red-400'
+                  }`}
+                >
+                  {pwMsg}
+                </p>
+              )}
+              <input
+                type="password"
+                value={pwCur}
+                onChange={e => setPwCur(e.target.value)}
+                placeholder="Password lama"
+                autoComplete="current-password"
+                className="input-manga"
+              />
+              <input
+                type="password"
+                value={pwNew}
+                onChange={e => setPwNew(e.target.value)}
+                placeholder="Password baru (min 6)"
+                autoComplete="new-password"
+                className="input-manga"
+              />
+              <input
+                type="password"
+                value={pwConf}
+                onChange={e => setPwConf(e.target.value)}
+                placeholder="Ulangi password baru"
+                autoComplete="new-password"
+                className="input-manga"
+              />
+              <button
+                type="submit"
+                disabled={pwBusy}
+                className="btn-primary w-full rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              >
+                {pwBusy ? 'Menyimpan…' : 'Simpan password'}
+              </button>
+            </form>
+          )}
           {user.role === 'admin' && (
             <Link
               to="/admin"

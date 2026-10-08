@@ -210,3 +210,7 @@ create table if not exists public.comments (
 
 create index if not exists idx_comments_manga_created on public.comments(manga_id, created_at desc);
 
+-- Komentar per chapter (opsional): null = komentar level judul.
+alter table public.comments add column if not exists chapter_id uuid references public.chapters(id) on delete cascade;
+create index if not exists idx_comments_manga_chapter on public.comments(manga_id, chapter_id, created_at desc);
+

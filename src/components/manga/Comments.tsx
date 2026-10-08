@@ -16,7 +16,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function Comments({ mangaId }: { mangaId: string }) {
+export default function Comments({ mangaId, chapterId }: { mangaId: string; chapterId?: string }) {
   const { user } = useAuth()
   const [items, setItems] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,11 +26,13 @@ export default function Comments({ mangaId }: { mangaId: string }) {
 
   useEffect(() => {
     setLoading(true)
-    fetchComments(mangaId)
+    setBody('')
+    setError('')
+    fetchComments(mangaId, chapterId)
       .then(setItems)
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [mangaId])
+  }, [mangaId, chapterId])
 
   const send = async () => {
     const text = body.trim()
@@ -38,7 +40,7 @@ export default function Comments({ mangaId }: { mangaId: string }) {
     setSending(true)
     setError('')
     try {
-      const c = await postComment(mangaId, text)
+      const c = await postComment(mangaId, text, chapterId)
       setItems(prev => [c, ...prev])
       setBody('')
     } catch (e: any) {

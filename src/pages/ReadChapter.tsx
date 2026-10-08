@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchChapters, fetchMangaBySlug, fetchReadChapters, fetchShinigamiPages, recordView } from '../api/library'
+import Comments from '../components/manga/Comments'
 import { useLibrary } from '../context/LibraryContext'
 import { useAuth } from '../context/AuthContext'
 import type { Manga, Chapter } from '../types'
@@ -233,6 +234,10 @@ export default function ReadChapter() {
           <EndNav prev={prev} next={next} mangaSlug={manga.slug} />
         </>
       )}
+
+      <div className="mx-auto w-full max-w-200 px-4 pb-8">
+        <Comments mangaId={manga.id} chapterId={current.id} />
+      </div>
 
       {readerControlsOpen && (
         <ReaderControls

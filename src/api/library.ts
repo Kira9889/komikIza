@@ -246,20 +246,22 @@ export async function saveChapter(
 // ---------------------------------------------------------------
 // KOMENTAR (baca publik, tulis harus login)
 // ---------------------------------------------------------------
-export async function fetchComments(mangaId: string): Promise<Comment[]> {
+export async function fetchComments(mangaId: string, chapterId?: string): Promise<Comment[]> {
   if (!(await isBackendOnline())) return []
   try {
-    return await apiFetch<Comment[]>(`/manga/${mangaId}/comments`)
+    return await apiFetch<Comment[]>(`/manga/${mangaId}/comments`, {
+      query: chapterId ? { chapter_id: chapterId } : undefined,
+    })
   } catch (e) {
     console.error(e)
     return []
   }
 }
 
-export async function postComment(mangaId: string, body: string): Promise<Comment> {
+export async function postComment(mangaId: string, body: string, chapterId?: string): Promise<Comment> {
   return apiFetch<Comment>(`/manga/${mangaId}/comments`, {
     method: 'POST',
-    body: JSON.stringify({ body }),
+    body: JSON.stringify({ body, chapter_id: chapterId ?? null }),
   })
 }
 

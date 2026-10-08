@@ -1393,18 +1393,30 @@ app.get('/api/manga/:mangaId/comments', async (req, res) => {
     const { mangaId } = req.params
     if (!isValidUuid(mangaId)) return res.status(400).json({ error: 'ID judul tidak valid' })
     const limit = Math.max(1, Math.min(Number(req.query.limit || 100), 100))
-    const rows = await query(
-      `select c.id, c.body, c.created_at, c.user_id, m.username
-       from comments c join members m on m.id = c.user_id
-       where c.manga_id = $1 order by c.created_at desc limit $2`,
-      [mangaId, limit],
-    )
+    // Filter opsional per chapter (untuk halaman baca). Tanpa filter = semua
+    // komentar judul (untuk halaman detail).
+    const chapterId = String(req.query.chapter_id || '')
+    if (chapterId && !isValidUuid(chapterId)) return res.status(400).json({ error: 'ID chapter tidak valid' })
+    const rows = chapterId
+      ? await query(
+        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username
+         from comments c join members m on m.id = c.user_id
+         where c.manga_id = $1 and c.chapter_id = $2 order by c.created_at desc limit $3`,
+        [mangaId, chapterId, limit],
+      )
+      : await query(
+        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username
+         from comments c join members m on m.id = c.user_id
+         where c.manga_id = $1 order by c.created_at desc limit $2`,
+        [mangaId, limit],
+      )
     res.json(rows.map(r => ({
       id: r.id,
       body: r.body,
       created_at: r.created_at,
       user_id: r.user_id,
       username: r.username,
+      chapter_id: r.chapter_id,
     })))
   } catch (e) {
     console.error(e)
@@ -1419,14 +1431,20 @@ app.post('/api/manga/:mangaId/comments', commentLimiter, requireAuth, async (req
     const body = String((req.body || {}).body || '').trim()
     if (!body) return res.status(400).json({ error: 'Komentar tidak boleh kosong' })
     if (body.length > 1000) return res.status(400).json({ error: 'Komentar maksimal 1000 karakter' })
+    const chapterId = (req.body || {}).chapter_id ? String((req.body || {}).chapter_id) : null
+    if (chapterId && !isValidUuid(chapterId)) return res.status(400).json({ error: 'ID chapter tidak valid' })
     const exists = await query('select id from manga where id = $1', [mangaId])
     if (!exists[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
+    if (chapterId) {
+      const ch = await query('select id from chapters where id = $1 and manga_id = $2', [chapterId, mangaId])
+      if (!ch[0]) return res.status(404).json({ error: 'Chapter tidak ditemukan di judul ini' })
+    }
     const rows = await query(
-      `insert into comments (manga_id, user_id, body) values ($1, $2, $3)
-       returning id, body, created_at`,
-      [mangaId, req.user.id, body],
+      `insert into comments (manga_id, chapter_id, user_id, body) values ($1, $2, $3, $4)
+       returning id, body, created_at, chapter_id`,
+      [mangaId, chapterId, req.user.id, body],
     )
-    res.json({ id: rows[0].id, body: rows[0].body, created_at: rows[0].created_at, user_id: req.user.id, username: req.user.username })
+    res.json({ id: rows[0].id, body: rows[0].body, created_at: rows[0].created_at, user_id: req.user.id, username: req.user.username, chapter_id: rows[0].chapter_id })
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengirim komentar' })

@@ -78,6 +78,7 @@ export interface Comment {
   created_at: string
   user_id: string
   username: string
+  chapter_id?: string | null
 }
 
 export type UserRole = 'admin' | 'user'

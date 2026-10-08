@@ -17,6 +17,10 @@ export default function Explore() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    document.title = 'Jelajahi Komik — Tenshi.id'
+  }, [])
+
+  useEffect(() => {
     setLoading(true)
     fetchMangaList({
       type: type === 'semua' ? undefined : type,

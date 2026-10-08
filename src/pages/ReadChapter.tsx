@@ -55,6 +55,11 @@ export default function ReadChapter() {
     setMenuOpen(opening)
   }
 
+  useEffect(() => {
+    document.title =
+      manga && current ? `${manga.title} ${current.name} — Tenshi.id` : 'Baca Chapter — Tenshi.id'
+  }, [manga?.title, current?.name])
+
   // Header overlay makin solid saat halaman digulir
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)

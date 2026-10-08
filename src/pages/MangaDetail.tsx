@@ -49,6 +49,10 @@ export default function MangaDetail() {
   }
 
   useEffect(() => {
+    document.title = manga ? `${manga.title} — Tenshi.id` : 'Tenshi.id — Digital Manga Library'
+  }, [manga?.title])
+
+  useEffect(() => {
     if (!slug) return
     setLoading(true)
     setChaptersLoading(true)

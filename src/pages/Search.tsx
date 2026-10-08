@@ -38,6 +38,9 @@ export default function Search() {
     }).finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    document.title = query ? `Cari ${query} — Tenshi.id` : 'Cari Komik — Tenshi.id'
+  }, [query])
   useEffect(() => setInput(query), [query])
   useEffect(() => setVisible(PAGE_SIZE), [query, selectedGenres, type, status, sort])
 

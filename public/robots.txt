@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /library
+
+Sitemap: https://tenshi.my.id/sitemap.xml

@@ -15,6 +15,10 @@ export default function Home() {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
+    document.title = 'Tenshi.id — Digital Manga Library'
+  }, [])
+
+  useEffect(() => {
     fetchHomeCollections().then(setData).catch(console.error)
   }, [])
 

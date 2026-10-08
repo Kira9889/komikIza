@@ -82,6 +82,26 @@ export interface Comment {
   chapter_id?: string | null
 }
 
+export interface Announcement {
+  id: string
+  title: string
+  body: string
+  created_at: string
+}
+
+export interface AdminComment {
+  id: string
+  body: string
+  created_at: string
+  user_id: string
+  username: string
+  manga_id: string
+  manga_title: string
+  manga_slug: string
+  chapter_id: string | null
+  chapter_name: string | null
+}
+
 export type UserRole = 'admin' | 'user'
 
 export interface User {

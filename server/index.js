@@ -80,6 +80,25 @@ async function ensureSchema() {
   // Akun lama yang sudah ada sebelum era verifikasi dianggap terverifikasi.
   await query(`update members set email_verified = true where email = 'admin@tenshi.id'`)
   await query(`update members set email_verified = true where email = 'admin@izalib.test'`)
+  // Seed pengumuman awal sekali saja (kalau tabel masih kosong).
+  const annCount = await query('select count(*)::int as n from announcements')
+  if (!annCount[0].n) {
+    await query(
+      `insert into announcements (title, body, created_at) values
+       ($1, $2, $3), ($4, $5, $6), ($7, $8, $9)`,
+      [
+        'Mode Baca Imersif',
+        'Navbar dan menu bawah kini otomatis sembunyi saat membaca chapter agar tidak menutupi tombol prev/next. Ketuk gambar untuk memunculkannya lagi. Daftar chapter juga bisa diurutkan Terbaru/Terlama.',
+        '2026-09-14T22:47:35+07:00',
+        'Koneksi Lebih Stabil',
+        'Indikator loading baru saat server aktif kembali dari mode tidur, tombol Coba lagi saat gagal memuat, plus penjaga otomatis tiap 4 menit agar database tidak tidur.',
+        '2026-09-14T23:27:03+07:00',
+        'Lebih Ringan & Cepat',
+        'Logo baru Tenshi.id yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
+        '2026-09-14T23:35:57+07:00',
+      ],
+    )
+  }
 }
 
 // ---------------------------------------------------------------
@@ -1637,6 +1656,87 @@ app.delete('/api/comments/:id', requireAuth, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal menghapus komentar' })
+  }
+})
+
+// ---------------- PENGUMUMAN ----------------
+// Baca publik (sidebar Home), tulis admin saja.
+app.get('/api/announcements', async (_req, res) => {
+  try {
+    const rows = await query('select id, title, body, created_at from announcements order by created_at desc')
+    res.json(rows)
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil pengumuman' })
+  }
+})
+
+app.post('/api/announcements', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const title = String((req.body || {}).title || '').trim()
+    const body = String((req.body || {}).body || '').trim()
+    if (!title) return res.status(400).json({ error: 'Judul wajib diisi' })
+    const rows = await query(
+      'insert into announcements (title, body) values ($1, $2) returning id, title, body, created_at',
+      [title, body],
+    )
+    res.json(rows[0])
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menambah pengumuman' })
+  }
+})
+
+app.put('/api/announcements/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
+    const title = String((req.body || {}).title || '').trim()
+    const body = String((req.body || {}).body || '').trim()
+    if (!title) return res.status(400).json({ error: 'Judul wajib diisi' })
+    const rows = await query(
+      'update announcements set title = $1, body = $2 where id = $3 returning id, title, body, created_at',
+      [title, body, id],
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Pengumuman tidak ditemukan' })
+    res.json(rows[0])
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal memperbarui pengumuman' })
+  }
+})
+
+app.delete('/api/announcements/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
+    await query('delete from announcements where id = $1', [id])
+    res.status(204).end()
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menghapus pengumuman' })
+  }
+})
+
+// ---------------- MODERASI KOMENTAR (admin) ----------------
+// Semua komentar user: dari buku + chapter apa. Hapus pakai
+// DELETE /api/comments/:id yang sudah ada (admin boleh hapus milik siapa saja).
+app.get('/api/admin/comments', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const rows = await query(
+      `select c.id, c.body, c.created_at, c.user_id, m.username,
+              c.manga_id, g.title as manga_title, g.slug as manga_slug,
+              c.chapter_id, ch.name as chapter_name
+       from comments c
+       join members m on m.id = c.user_id
+       join manga g on g.id = c.manga_id
+       left join chapters ch on ch.id = c.chapter_id
+       order by c.created_at desc limit 200`,
+    )
+    res.json(rows)
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil komentar' })
   }
 })
 

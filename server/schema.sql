@@ -218,6 +218,16 @@ alter table public.comments add column if not exists chapter_id uuid references 
 create index if not exists idx_comments_manga_chapter on public.comments(manga_id, chapter_id, created_at desc);
 
 -- ------------------------------------------------------------
+-- PENGUMUMAN (dikelola dari panel admin, tampil di sidebar Home)
+-- ------------------------------------------------------------
+create table if not exists public.announcements (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null,
+  body       text not null default '',
+  created_at timestamptz not null default now()
+);
+
+-- ------------------------------------------------------------
 -- RLS: kunci API bawaan Supabase (PostgREST). Aplikasi hanya lewat
 -- backend Express (koneksi owner, tidak kena RLS), jadi tanpa policy =
 -- tolak SEMUA akses langsung via anon key. Tanpa ini, siapa pun yang
@@ -237,4 +247,5 @@ alter table public.likes enable row level security;
 alter table public.history enable row level security;
 alter table public.read_chapters enable row level security;
 alter table public.comments enable row level security;
+alter table public.announcements enable row level security;
 

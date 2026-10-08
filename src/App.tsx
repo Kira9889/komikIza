@@ -19,6 +19,8 @@ const AdminManga = lazy(() => import('./pages/admin/AdminManga'))
 const AdminGenres = lazy(() => import('./pages/admin/AdminGenres'))
 const AdminAuthors = lazy(() => import('./pages/admin/AdminAuthors'))
 const AdminChapters = lazy(() => import('./pages/admin/AdminChapters'))
+const AdminComments = lazy(() => import('./pages/admin/AdminComments'))
+const AdminAnnouncements = lazy(() => import('./pages/admin/AdminAnnouncements'))
 
 function RouteFallback() {
   return (
@@ -61,6 +63,8 @@ export default function App() {
           <Route path="genres" element={<AdminGenres />} />
           <Route path="authors" element={<AdminAuthors />} />
           <Route path="chapters" element={<AdminChapters />} />
+          <Route path="comments" element={<AdminComments />} />
+          <Route path="announcements" element={<AdminAnnouncements />} />
         </Route>
 
         <Route path="*" element={<Home />} />

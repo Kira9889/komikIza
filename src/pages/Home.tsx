@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchHomeCollections } from '../api/library'
-import type { HomeCollections, Manga } from '../types'
+import { fetchAnnouncements, fetchHomeCollections } from '../api/library'
+import type { Announcement, HomeCollections, Manga } from '../types'
 import MangaCard from '../components/manga/MangaCard'
 import SectionTitle from '../components/ui/SectionTitle'
 import FilterTabs from '../components/ui/FilterTabs'
@@ -13,6 +13,14 @@ export default function Home() {
   const [updTab, setUpdTab] = useState('project')
   // Jam berjalan agar label waktu pengumuman selalu real-time.
   const [now, setNow] = useState(() => Date.now())
+  // Pengumuman dari backend (dikelola Admin); fallback ke bawaan bila offline.
+  const [announcements, setAnnouncements] = useState<Announcement[]>(DEFAULT_ANNOUNCEMENTS)
+
+  useEffect(() => {
+    fetchAnnouncements().then(list => {
+      if (list.length) setAnnouncements(list)
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     document.title = 'Tenshi.id — Digital Manga Library'
@@ -49,11 +57,11 @@ export default function Home() {
               <Link to="#" className="text-sm text-general-400 hover:text-primary-500">Semua</Link>
             </div>
             <div className="space-y-3">
-              {ANNOUNCEMENTS.map(a => (
+              {announcements.map(a => (
                 <Announcement
-                  key={a.title}
+                  key={a.id}
                   title={a.title}
-                  time={timeAgo(a.date, now)}
+                  time={timeAgo(a.created_at, now)}
                   body={a.body}
                 />
               ))}
@@ -129,21 +137,24 @@ export default function Home() {
   )
 }
 
-// Waktu terbit asli (WIB) tiap pengumuman — label relatif dihitung real-time.
-const ANNOUNCEMENTS: { title: string; date: string; body: string }[] = [
+// Fallback bila backend offline — versi online dikelola dari panel Admin.
+const DEFAULT_ANNOUNCEMENTS: Announcement[] = [
   {
+    id: 'default-1',
     title: 'Mode Baca Imersif',
-    date: '2026-09-14T22:47:35+07:00',
+    created_at: '2026-09-14T22:47:35+07:00',
     body: 'Navbar dan menu bawah kini otomatis sembunyi saat membaca chapter agar tidak menutupi tombol prev/next. Ketuk gambar untuk memunculkannya lagi. Daftar chapter juga bisa diurutkan Terbaru/Terlama.',
   },
   {
+    id: 'default-2',
     title: 'Koneksi Lebih Stabil',
-    date: '2026-09-14T23:27:03+07:00',
+    created_at: '2026-09-14T23:27:03+07:00',
     body: 'Indikator loading baru saat server aktif kembali dari mode tidur, tombol Coba lagi saat gagal memuat, plus penjaga otomatis tiap 4 menit agar database tidak tidur.',
   },
   {
+    id: 'default-3',
     title: 'Lebih Ringan & Cepat',
-    date: '2026-09-14T23:35:57+07:00',
+    created_at: '2026-09-14T23:35:57+07:00',
     body: 'Logo baru Tenshi.id yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
   },
 ]

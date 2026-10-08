@@ -10,7 +10,7 @@ import {
   ensureAuthors as mockEnsureAuthors,
   getChaptersCached,
 } from '../data/store'
-import type { Manga, Genre, Author, Chapter, Comment, HomeCollections, MangaInput } from '../types'
+import type { Manga, Genre, Author, Chapter, Comment, AdminComment, Announcement, HomeCollections, MangaInput } from '../types'
 
 // ---------------------------------------------------------------
 // PUBLIC READ API
@@ -267,6 +267,43 @@ export async function postComment(mangaId: string, body: string, chapterId?: str
 
 export async function deleteComment(id: string): Promise<void> {
   await apiFetch(`/comments/${id}`, { method: 'DELETE' })
+}
+
+// ---------------------------------------------------------------
+// PENGUMUMAN (baca publik, tulis admin)
+// ---------------------------------------------------------------
+export async function fetchAnnouncements(): Promise<Announcement[]> {
+  try {
+    return await apiFetch<Announcement[]>('/announcements')
+  } catch (e) {
+    console.error(e)
+    return []
+  }
+}
+
+export async function saveAnnouncement(input: { id?: string; title: string; body: string }): Promise<void> {
+  if (input.id) {
+    await apiFetch(`/announcements/${input.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title: input.title, body: input.body }),
+    })
+  } else {
+    await apiFetch('/announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title: input.title, body: input.body }),
+    })
+  }
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await apiFetch(`/announcements/${id}`, { method: 'DELETE' })
+}
+
+// ---------------------------------------------------------------
+// MODERASI KOMENTAR (admin)
+// ---------------------------------------------------------------
+export async function fetchAllComments(): Promise<AdminComment[]> {
+  return apiFetch<AdminComment[]>('/admin/comments')
 }
 
 export async function deleteChapter(id: string): Promise<void> {

@@ -1570,7 +1570,6 @@ ensureSchema()
     server.on('listening', () => {
       console.log(`Tenshi.id server berjalan di http://localhost:${PORT}`)
       console.log('Database: OK (skema siap)')
-      console.log('Akun admin demo: admin@tenshi.id / admin123')
     })
   })
   .catch(err => {

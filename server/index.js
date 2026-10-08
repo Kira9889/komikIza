@@ -108,17 +108,38 @@ const CODE_MAX_ATTEMPTS = 5
 const RESEND_COOLDOWN_MS = 60 * 1000 // kirim ulang tiap 60 detik
 
 let mailer = null
-function getMailer() {
+let smtpIpPromise = null
+// Render free tidak punya rute IPv6 (ENETUNREACH ke smtp.gmail.com yang
+// ke-resolve IPv6). Paksa IPv4 dengan resolve manual sekali lalu cache.
+// Sertifikat tetap valid karena tls.servername = hostname asli.
+function resolveSmtpIp() {
+  if (!smtpIpPromise) {
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com'
+    smtpIpPromise = import('node:dns/promises')
+      .then(dns => dns.resolve4(host))
+      .then(addrs => addrs[0])
+      .catch(() => host)
+  }
+  return smtpIpPromise
+}
+async function getMailer() {
   if (mailer) return mailer
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null
+  const port = Number(SMTP_PORT || 465)
   mailer = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT || 465),
-    secure: Number(SMTP_PORT || 465) === 465,
+    host: await resolveSmtpIp(),
+    port,
+    secure: port === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    tls: { servername: SMTP_HOST, minVersion: 'TLSv1.2' },
   })
   return mailer
+}
+// Cek konfigurasi sinkron (untuk flag UI) — pengiriman tetap async.
+function hasSmtpConfig() {
+  const { SMTP_HOST, SMTP_USER, SMTP_PASS } = process.env
+  return !!(SMTP_HOST && SMTP_USER && SMTP_PASS)
 }
 
 async function createCode(email) {
@@ -139,7 +160,7 @@ async function createCode(email) {
 }
 
 async function sendCodeEmail(email, code) {
-  const mail = getMailer()
+  const mail = await getMailer()
   if (mail) {
     const from = process.env.SMTP_FROM || process.env.SMTP_USER
     await mail.sendMail({
@@ -722,7 +743,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     // Balas langsung agar UI tidak menunggu SMTP (koneksi Gmail bisa 3-10
     // detik saat dingin). Email dikirim di background; kalau gagal sampai,
     // user tinggal pakai tombol kirim-ulang di halaman verifikasi.
-    res.json({ needsVerification: true, email: mail, emailSent: !!getMailer() })
+    res.json({ needsVerification: true, email: mail, emailSent: hasSmtpConfig() })
     sendCodeEmail(mail, code).catch(e =>
       console.error('[verifikasi] gagal kirim email:', e.message),
     )

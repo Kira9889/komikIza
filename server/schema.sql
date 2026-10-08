@@ -172,6 +172,9 @@ alter table public.members add column if not exists email_verified boolean not n
 alter table public.members add column if not exists google_sub text;
 create unique index if not exists idx_members_google_sub on public.members(google_sub) where google_sub is not null;
 
+-- Foto profil (URL publik R2, diisi lewat POST /api/me/avatar).
+alter table public.members add column if not exists avatar_url text;
+
 -- Kode verifikasi 6 digit (disimpan sebagai hash bcrypt, 1 baris per email).
 create table if not exists public.email_verification_codes (
   email      text primary key,

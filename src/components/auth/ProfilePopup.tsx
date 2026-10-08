@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { CloseIcon, EditIcon, UserIcon } from '../../icons'
 
 export default function ProfilePopup({ onClose }: { onClose: () => void }) {
-  const { user, logout, updateUsername } = useAuth()
+  const { user, logout, updateUsername, uploadAvatar } = useAuth()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   if (!user) return null
 
@@ -38,6 +40,22 @@ export default function ProfilePopup({ onClose }: { onClose: () => void }) {
     setEditing(false)
   }
 
+  const pickPhoto = () => {
+    setError('')
+    fileRef.current?.click()
+  }
+
+  const onPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    setError('')
+    const res = await uploadAvatar(file)
+    setUploading(false)
+    if (res.error) setError(res.error)
+  }
+
   return (
     <div
       className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4 backdrop-blur-md"
@@ -60,17 +78,37 @@ export default function ProfilePopup({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="relative mx-auto w-fit">
-          <span className="grid h-16 w-16 place-items-center rounded-full bg-primary-500/15 text-2xl font-bold uppercase text-primary-400">
-            {user.username.charAt(0)}
-          </span>
+          {user.avatar_url ? (
+            <img
+              src={user.avatar_url}
+              alt={user.username}
+              className="h-16 w-16 rounded-full object-cover ring-2 ring-primary-500/40"
+            />
+          ) : (
+            <span className="grid h-16 w-16 place-items-center rounded-full bg-primary-500/15 text-2xl font-bold uppercase text-primary-400">
+              {user.username.charAt(0)}
+            </span>
+          )}
           <button
-            onClick={startEdit}
-            aria-label="Ubah username"
-            title="Ubah username"
-            className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-(--line) bg-(--card-2) text-general-400 shadow transition hover:text-primary-400"
+            onClick={pickPhoto}
+            aria-label="Ganti foto profil"
+            title="Ganti foto profil"
+            disabled={uploading}
+            className="absolute -right-2 -top-2 grid h-7 w-7 place-items-center rounded-full border border-(--line) bg-(--card-2) text-general-400 shadow transition hover:text-primary-400 disabled:opacity-60"
           >
-            <EditIcon className="h-3.5 w-3.5" />
+            {uploading ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-primary-400" />
+            ) : (
+              <EditIcon className="h-3.5 w-3.5" />
+            )}
           </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={onPhoto}
+          />
         </div>
         {editing ? (
           <form onSubmit={saveName} className="mt-3 space-y-2">
@@ -105,7 +143,17 @@ export default function ProfilePopup({ onClose }: { onClose: () => void }) {
             </div>
           </form>
         ) : (
-          <h2 className="mt-3 truncate font-display text-lg font-extrabold">{user.username}</h2>
+          <div className="mt-3 flex items-center justify-center gap-1.5">
+            <h2 className="truncate font-display text-lg font-extrabold">{user.username}</h2>
+            <button
+              onClick={startEdit}
+              aria-label="Ubah username"
+              title="Ubah username"
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-general-400 transition hover:bg-white/10 hover:text-primary-400"
+            >
+              <EditIcon className="h-3 w-3" />
+            </button>
+          </div>
         )}
         <p className="mt-1 truncate text-sm text-general-400">{user.email}</p>
         <span

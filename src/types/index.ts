@@ -89,6 +89,7 @@ export interface User {
   email: string
   role: UserRole
   email_verified?: boolean
+  avatar_url?: string
 }
 
 // ----------------------------------------------------------------

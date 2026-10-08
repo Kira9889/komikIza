@@ -54,9 +54,10 @@ export async function apiFetch<T = any>(
   options: RequestInit & ApiOptions = {},
 ): Promise<T> {
   const token = getToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
+  const headers: Record<string, string> = {}
+  // FormData (upload file) harus pakai boundary otomatis browser — jangan
+  // timpa Content-Type, nanti gagal parse di server.
+  if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = `Bearer ${token}`
   if (options.headers) Object.assign(headers, options.headers)
 

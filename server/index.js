@@ -9,6 +9,8 @@ import { OAuth2Client } from 'google-auth-library'
 import nodemailer from 'nodemailer'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import multer from 'multer'
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { randomInt } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -94,6 +96,7 @@ function publicUser(row) {
     username: row.username,
     role: row.role,
     email_verified: !!row.email_verified,
+    avatar_url: row.avatar_url || undefined,
   }
 }
 
@@ -244,7 +247,7 @@ async function loadUserByToken(req) {
   if (!token) return null
   try {
     const payload = jwt.verify(token, JWT_SECRET)
-    const rows = await query('select id, email, username, role from members where id = $1', [payload.sub])
+    const rows = await query('select id, email, username, role, avatar_url from members where id = $1', [payload.sub])
     return rows[0] || null
   } catch {
     return null
@@ -831,7 +834,7 @@ app.post('/api/auth/verify-email', codeLimiter, async (req, res) => {
     await query('delete from email_verification_codes where email = $1', [mail])
     const users = await query(
       `update members set email_verified = true where email = $1
-       returning id, email, username, role, email_verified`,
+       returning id, email, username, role, email_verified, avatar_url`,
       [mail],
     )
     const user = users[0]
@@ -932,7 +935,7 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
         // Tautkan akun lama (daftar via password) ke Google.
         row = (await query(
           `update members set google_sub = $1, email_verified = true where email = $2
-           returning id, email, username, role, email_verified`,
+           returning id, email, username, role, email_verified, avatar_url`,
           [sub, mail],
         ))[0]
       } else {
@@ -942,7 +945,7 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
         row = (await query(
           `insert into members (email, username, password_hash, role, email_verified, google_sub)
            values ($1, $2, null, 'user', true, $3)
-           returning id, email, username, role, email_verified`,
+           returning id, email, username, role, email_verified, avatar_url`,
           [mail, uname, sub],
         ))[0]
       }
@@ -964,7 +967,7 @@ app.put('/api/me/username', requireAuth, async (req, res) => {
     if (username.length > 24) return res.status(400).json({ error: 'Username maksimal 24 karakter' })
     const rows = await query(
       `update members set username = $1 where id = $2
-       returning id, email, username, role, email_verified`,
+       returning id, email, username, role, email_verified, avatar_url`,
       [username, req.user.id],
     )
     if (!rows[0]) return res.status(404).json({ error: 'Akun tidak ditemukan' })
@@ -973,6 +976,74 @@ app.put('/api/me/username', requireAuth, async (req, res) => {
     console.error(e)
     res.status(500).json({ error: 'Gagal memperbarui username' })
   }
+})
+
+// Foto profil sendiri (login wajib). Disimpan ke R2: avatars/<userId>.<ext>.
+// Syarat R2_* di env sama seperti impor R2 (server/.env).
+const AVATAR_MIMES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' }
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (AVATAR_MIMES[file.mimetype]) return cb(null, true)
+    cb(new Error('Format harus JPG, PNG, WebP, atau GIF (maks 2MB)'))
+  },
+})
+let r2avatar = null
+function getAvatarS3() {
+  const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = process.env
+  if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) return null
+  if (!r2avatar) {
+    let endpoint = String(R2_ENDPOINT).trim().replace(/\/+$/, '')
+    const m = endpoint.match(/^(https:\/\/[a-z0-9]+\.r2\.cloudflarestorage\.com)(\/.*)?$/)
+    if (m) endpoint = m[1]
+    r2avatar = new S3Client({
+      region: 'auto',
+      endpoint,
+      credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+    })
+  }
+  return r2avatar
+}
+const avatarLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
+
+app.post('/api/me/avatar', avatarLimiter, requireAuth, (req, res) => {
+  avatarUpload.single('avatar')(req, res, async err => {
+    try {
+      if (err) return res.status(400).json({ error: err.message || 'Upload gagal' })
+      if (!req.file) return res.status(400).json({ error: 'Pilih gambar dulu' })
+      const s3 = getAvatarS3()
+      const bucket = process.env.R2_BUCKET || 'chapter'
+      const publicBase = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '')
+      if (!s3 || !publicBase) return res.status(500).json({ error: 'Upload foto belum dikonfigurasi di server.' })
+      const ext = AVATAR_MIMES[req.file.mimetype]
+      const key = `avatars/${req.user.id}.${ext}`
+      await s3.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      }))
+      // Hapus file lama beda ekstensi biar tidak yatim.
+      const oldUrl = (await query('select avatar_url from members where id = $1', [req.user.id]))[0]?.avatar_url
+      if (oldUrl && oldUrl.startsWith(publicBase + '/')) {
+        const oldKey = decodeURIComponent(oldUrl.slice(publicBase.length + 1))
+        if (oldKey && oldKey !== key) {
+          await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: oldKey })).catch(() => {})
+        }
+      }
+      const avatarUrl = `${publicBase}/${key}`
+      const rows = await query(
+        `update members set avatar_url = $1 where id = $2
+         returning id, email, username, role, email_verified, avatar_url`,
+        [avatarUrl, req.user.id],
+      )
+      res.json({ user: publicUser(rows[0]) })
+    } catch (e) {
+      console.error(e)
+      res.status(500).json({ error: 'Gagal mengunggah foto' })
+    }
+  })
 })
 
 // ---------------- MANGA (public read) ----------------

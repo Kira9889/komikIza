@@ -112,10 +112,10 @@ export default function Navbar() {
               className="flex items-center gap-2 rounded-lg border border-(--line) bg-(--card-2) px-3 py-1.5 transition hover:border-primary-500/50"
               aria-label="Buka profil"
             >
-              <UserAvatarInitial name={user.username} />
-              <span className="max-w-24 truncate text-sm font-medium text-general-300">
-                {user.username}
-              </span>
+                  <UserAvatarInitial name={user.username} avatarUrl={user.avatar_url} />
+                  <span className="truncate text-sm font-medium text-general-300">
+                    {user.username}
+                  </span>
             </button>
           ) : (
             <Link to="/login" className="btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold">
@@ -198,7 +198,7 @@ export default function Navbar() {
                   }}
                   className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-(--line) bg-(--card-2) px-3 py-2"
                 >
-                  <UserAvatarInitial name={user.username} />
+              <UserAvatarInitial name={user.username} avatarUrl={user.avatar_url} />
                   <span className="truncate text-sm font-medium text-general-300">
                     {user.username}
                   </span>
@@ -228,7 +228,10 @@ export default function Navbar() {
   )
 }
 
-function UserAvatarInitial({ name = 'G' }: { name?: string }) {
+function UserAvatarInitial({ name = 'G', avatarUrl }: { name?: string; avatarUrl?: string }) {
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt={name} className="h-6 w-6 rounded-full object-cover" />
+  }
   return (
     <span className="grid h-6 w-6 place-items-center rounded-full bg-white/20 text-xs font-bold uppercase">
       {name.charAt(0)}

@@ -23,6 +23,7 @@ interface AuthContextValue {
   verifyEmail: (data: { email: string; code: string }) => Promise<AuthResult>
   resendCode: (email: string) => Promise<AuthResult>
   updateUsername: (username: string) => Promise<AuthResult>
+  uploadAvatar: (file: File) => Promise<AuthResult>
   logout: () => Promise<void>
 }
 
@@ -266,13 +267,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const uploadAvatar = async (file: File): Promise<AuthResult> => {
+    if (!user) return { error: 'Harus login' }
+    if (file.size > 2 * 1024 * 1024) return { error: 'Ukuran maksimal 2MB' }
+    if (!/^(image\/jpeg|image\/png|image\/webp|image\/gif)$/.test(file.type)) {
+      return { error: 'Format harus JPG, PNG, WebP, atau GIF' }
+    }
+    try {
+      const fd = new FormData()
+      fd.append('avatar', file)
+      const res = await apiFetch<{ user: User }>('/me/avatar', { method: 'POST', body: fd })
+      persist(res.user)
+      return {}
+    } catch (e: any) {
+      return { error: e.message || 'Gagal mengunggah foto' }
+    }
+  }
+
   const logout = async () => {
     setToken(null)
     persist(null)
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, register, login, loginWithGoogle, verifyEmail, resendCode, updateUsername, logout }}>
+    <AuthContext.Provider value={{ user, loading, register, login, loginWithGoogle, verifyEmail, resendCode, updateUsername, uploadAvatar, logout }}>
       {children}
     </AuthContext.Provider>
   )

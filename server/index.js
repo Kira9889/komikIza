@@ -1027,12 +1027,14 @@ app.post('/api/me/avatar', avatarLimiter, requireAuth, (req, res) => {
       // Hapus file lama beda ekstensi biar tidak yatim.
       const oldUrl = (await query('select avatar_url from members where id = $1', [req.user.id]))[0]?.avatar_url
       if (oldUrl && oldUrl.startsWith(publicBase + '/')) {
-        const oldKey = decodeURIComponent(oldUrl.slice(publicBase.length + 1))
+        const oldKey = decodeURIComponent(oldUrl.slice(publicBase.length + 1).split('?')[0])
         if (oldKey && oldKey !== key) {
           await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: oldKey })).catch(() => {})
         }
       }
-      const avatarUrl = `${publicBase}/${key}`
+      // Suffix versi agar CDN/browser tidak menyajikan foto lama yang ke-cache
+      // (key R2-nya sama tiap upload ulang).
+      const avatarUrl = `${publicBase}/${key}?v=${Date.now()}`
       const rows = await query(
         `update members set avatar_url = $1 where id = $2
          returning id, email, username, role, email_verified, avatar_url`,

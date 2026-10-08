@@ -3,4 +3,5 @@ dist/
 .env
 .env.local
 server/.env
+server/backups/
 *.log

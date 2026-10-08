@@ -1,0 +1,4 @@
+Contact: https://tenshi.my.id/
+Expires: 2027-10-08T00:00:00.000Z
+Preferred-Languages: id, en
+Policy: Jangan uji beban berlebihan. Laporkan temuan dengan detail secukupnya, jangan disebar sebelum diperbaiki.

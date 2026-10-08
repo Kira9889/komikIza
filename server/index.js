@@ -36,6 +36,9 @@ if ((!process.env.JWT_SECRET || JWT_SECRET === DEV_JWT) && isProdLike) {
   process.exit(1)
 }
 if (JWT_SECRET === DEV_JWT) console.warn('[security] JWT_SECRET masih default — JANGAN dipakai di production.')
+if (isProdLike && !process.env.ADMIN_IPS) {
+  console.warn('[security] ADMIN_IPS kosong — panel admin bisa diakses dari IP mana pun (selama punya JWT admin). Isi dengan IP publikmu di Render > Environment.')
+}
 
 // Connection string (Neon dulu, sekarang Supabase) — diurai supaya
 // opsi seperti channel_binding / pgbouncer tidak merusak driver `pg`.
@@ -255,9 +258,27 @@ async function requireAuth(req, res, next) {
   next()
 }
 
+function clientIp(req) {
+  const xff = String(req.headers['x-forwarded-for'] || '')
+  const first = xff.split(',')[0].trim()
+  return first || req.ip
+}
+
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Akses admin diperlukan' })
-  next()
+  if (req.user?.role !== 'admin') {
+    console.warn(JSON.stringify({ at: new Date().toISOString(), event: 'admin_denied', user: req.user?.email || null, ip: clientIp(req), path: req.path }))
+    return res.status(403).json({ error: 'Akses admin diperlukan' })
+  }
+  // IP allowlist opsional (ADMIN_IPS="1.2.3.4,5.6.7.8" di Render). Kosong =
+  // tidak dibatasi (tetap wajib JWT admin). Cek IP-mu di whatismyip lalu isi.
+  const allow = (process.env.ADMIN_IPS || '').split(',').map(s => s.trim()).filter(Boolean)
+  const ip = clientIp(req)
+  if (allow.length && !allow.includes(ip)) {
+    console.warn(JSON.stringify({ at: new Date().toISOString(), event: 'admin_ip_blocked', user: req.user.email, ip, path: req.path }))
+    return res.status(403).json({ error: 'Akses admin ditolak dari IP ini' })
+  }
+  console.log(JSON.stringify({ at: new Date().toISOString(), event: 'admin_ok', user: req.user.email, ip, method: req.method, path: req.path }))
+  return adminLimiter(req, res, next)
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -588,6 +609,7 @@ const authLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeade
 const codeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 15, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
 const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
 const commentLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
+const adminLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,

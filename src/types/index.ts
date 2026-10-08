@@ -72,6 +72,14 @@ export interface HomeCollections {
   announcement?: { title: string; body: string }
 }
 
+export interface Comment {
+  id: string
+  body: string
+  created_at: string
+  user_id: string
+  username: string
+}
+
 export type UserRole = 'admin' | 'user'
 
 export interface User {

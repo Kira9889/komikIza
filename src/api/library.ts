@@ -10,7 +10,7 @@ import {
   ensureAuthors as mockEnsureAuthors,
   getChaptersCached,
 } from '../data/store'
-import type { Manga, Genre, Author, Chapter, HomeCollections, MangaInput } from '../types'
+import type { Manga, Genre, Author, Chapter, Comment, HomeCollections, MangaInput } from '../types'
 
 // ---------------------------------------------------------------
 // PUBLIC READ API
@@ -227,22 +227,44 @@ export async function saveChapter(
   mangaId: string,
   data: { id?: string; name: string; pages: Chapter['pages']; pdf_url?: string },
 ): Promise<void> {
-  if (!(await isBackendOnline())) return
+  if (!(await isBackendOnline())) throw new Error('Server tidak merespons. Coba lagi sebentar lagi.')
+  // Sengaja TIDAK di-catch: pemanggil (Admin) menampilkan error ke user
+  // (mis. nama chapter ganda). Menelan error bikin user klik Simpan berulang.
+  if (data.id) {
+    await apiFetch(`/chapters/${data.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: data.name, pages: data.pages, pdf_url: data.pdf_url || null }),
+    })
+  } else {
+    await apiFetch(`/manga/${mangaId}/chapters`, {
+      method: 'POST',
+      body: JSON.stringify({ name: data.name, pages: data.pages, pdf_url: data.pdf_url || null }),
+    })
+  }
+}
+
+// ---------------------------------------------------------------
+// KOMENTAR (baca publik, tulis harus login)
+// ---------------------------------------------------------------
+export async function fetchComments(mangaId: string): Promise<Comment[]> {
+  if (!(await isBackendOnline())) return []
   try {
-    if (data.id) {
-      await apiFetch(`/chapters/${data.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ name: data.name, pages: data.pages, pdf_url: data.pdf_url || null }),
-      })
-    } else {
-      await apiFetch(`/manga/${mangaId}/chapters`, {
-        method: 'POST',
-        body: JSON.stringify({ name: data.name, pages: data.pages, pdf_url: data.pdf_url || null }),
-      })
-    }
+    return await apiFetch<Comment[]>(`/manga/${mangaId}/comments`)
   } catch (e) {
     console.error(e)
+    return []
   }
+}
+
+export async function postComment(mangaId: string, body: string): Promise<Comment> {
+  return apiFetch<Comment>(`/manga/${mangaId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  })
+}
+
+export async function deleteComment(id: string): Promise<void> {
+  await apiFetch(`/comments/${id}`, { method: 'DELETE' })
 }
 
 export async function deleteChapter(id: string): Promise<void> {

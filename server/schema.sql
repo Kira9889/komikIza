@@ -197,3 +197,16 @@ create index if not exists idx_manga_shinigami_views on public.manga(shinigami_v
 create index if not exists idx_manga_shinigami_bookmarks on public.manga(shinigami_bookmarks desc);
 create index if not exists idx_manga_latest_chapter_time on public.manga(latest_chapter_time desc);
 
+-- ------------------------------------------------------------
+-- KOMENTAR — 1 baris per komentar (baca publik, tulis harus login)
+-- ------------------------------------------------------------
+create table if not exists public.comments (
+  id         uuid primary key default gen_random_uuid(),
+  manga_id   uuid not null references public.manga(id) on delete cascade,
+  user_id    uuid not null references public.members(id) on delete cascade,
+  body       text not null check (char_length(body) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_comments_manga_created on public.comments(manga_id, created_at desc);
+

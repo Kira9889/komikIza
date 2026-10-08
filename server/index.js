@@ -534,6 +534,7 @@ const tooMany = { error: 'Terlalu banyak percobaan. Tunggu ±10 menit.' }
 const authLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
 const codeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 15, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
 const importLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
+const commentLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, standardHeaders: 'draft-7', legacyHeaders: false, message: tooMany })
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
@@ -1381,6 +1382,71 @@ app.get('/api/me/read-chapters', requireAuth, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengambil chapter dibaca' })
+  }
+})
+
+// ---------------- KOMENTAR ----------------
+// Baca publik (tamu boleh lihat), tulis + hapus harus login.
+// Hapus boleh oleh penulis sendiri atau admin.
+app.get('/api/manga/:mangaId/comments', async (req, res) => {
+  try {
+    const { mangaId } = req.params
+    if (!isValidUuid(mangaId)) return res.status(400).json({ error: 'ID judul tidak valid' })
+    const limit = Math.max(1, Math.min(Number(req.query.limit || 100), 100))
+    const rows = await query(
+      `select c.id, c.body, c.created_at, c.user_id, m.username
+       from comments c join members m on m.id = c.user_id
+       where c.manga_id = $1 order by c.created_at desc limit $2`,
+      [mangaId, limit],
+    )
+    res.json(rows.map(r => ({
+      id: r.id,
+      body: r.body,
+      created_at: r.created_at,
+      user_id: r.user_id,
+      username: r.username,
+    })))
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil komentar' })
+  }
+})
+
+app.post('/api/manga/:mangaId/comments', commentLimiter, requireAuth, async (req, res) => {
+  try {
+    const { mangaId } = req.params
+    if (!isValidUuid(mangaId)) return res.status(400).json({ error: 'ID judul tidak valid' })
+    const body = String((req.body || {}).body || '').trim()
+    if (!body) return res.status(400).json({ error: 'Komentar tidak boleh kosong' })
+    if (body.length > 1000) return res.status(400).json({ error: 'Komentar maksimal 1000 karakter' })
+    const exists = await query('select id from manga where id = $1', [mangaId])
+    if (!exists[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
+    const rows = await query(
+      `insert into comments (manga_id, user_id, body) values ($1, $2, $3)
+       returning id, body, created_at`,
+      [mangaId, req.user.id, body],
+    )
+    res.json({ id: rows[0].id, body: rows[0].body, created_at: rows[0].created_at, user_id: req.user.id, username: req.user.username })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengirim komentar' })
+  }
+})
+
+app.delete('/api/comments/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
+    const rows = await query('select user_id from comments where id = $1', [id])
+    if (!rows[0]) return res.status(404).json({ error: 'Komentar tidak ditemukan' })
+    if (rows[0].user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Tidak boleh menghapus komentar ini' })
+    }
+    await query('delete from comments where id = $1', [id])
+    res.status(204).end()
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menghapus komentar' })
   }
 })
 

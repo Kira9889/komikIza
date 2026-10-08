@@ -5,6 +5,7 @@ import { displayFollows, displayRating, displayViews, isShinigamiRating } from '
 import type { Manga, Chapter } from '../types'
 import { useLibrary } from '../context/LibraryContext'
 import { useAuth } from '../context/AuthContext'
+import Comments from '../components/manga/Comments'
 import {
   EyeIcon,
   StarIcon,
@@ -283,6 +284,8 @@ export default function MangaDetail() {
             </div>
           )}
         </section>
+
+        <Comments mangaId={manga.id} />
 
         {/* Info tambahan */}
         <section className="mt-10 rounded-xl border border-(--line) bg-(--card) p-5">

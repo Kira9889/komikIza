@@ -1570,13 +1570,13 @@ app.get('/api/manga/:mangaId/comments', async (req, res) => {
     if (chapterId && !isValidUuid(chapterId)) return res.status(400).json({ error: 'ID chapter tidak valid' })
     const rows = chapterId
       ? await query(
-        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username
+        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username, m.avatar_url
          from comments c join members m on m.id = c.user_id
          where c.manga_id = $1 and c.chapter_id = $2 order by c.created_at desc limit $3`,
         [mangaId, chapterId, limit],
       )
       : await query(
-        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username
+        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username, m.avatar_url
          from comments c join members m on m.id = c.user_id
          where c.manga_id = $1 order by c.created_at desc limit $2`,
         [mangaId, limit],
@@ -1587,6 +1587,7 @@ app.get('/api/manga/:mangaId/comments', async (req, res) => {
       created_at: r.created_at,
       user_id: r.user_id,
       username: r.username,
+      avatar_url: r.avatar_url || undefined,
       chapter_id: r.chapter_id,
     })))
   } catch (e) {
@@ -1615,7 +1616,7 @@ app.post('/api/manga/:mangaId/comments', commentLimiter, requireAuth, async (req
        returning id, body, created_at, chapter_id`,
       [mangaId, chapterId, req.user.id, body],
     )
-    res.json({ id: rows[0].id, body: rows[0].body, created_at: rows[0].created_at, user_id: req.user.id, username: req.user.username, chapter_id: rows[0].chapter_id })
+    res.json({ id: rows[0].id, body: rows[0].body, created_at: rows[0].created_at, user_id: req.user.id, username: req.user.username, avatar_url: req.user.avatar_url || undefined, chapter_id: rows[0].chapter_id })
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengirim komentar' })

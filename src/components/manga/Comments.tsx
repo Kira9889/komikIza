@@ -109,9 +109,18 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
               <div key={c.id} className="rounded-lg border border-(--line) bg-(--card-2) px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary-500/15 text-xs font-bold text-primary-500">
-                      {(c.username || '?').slice(0, 1).toUpperCase()}
-                    </span>
+                    {c.avatar_url ? (
+                      <img
+                        src={c.avatar_url}
+                        alt={c.username}
+                        loading="lazy"
+                        className="h-7 w-7 shrink-0 rounded-full object-cover ring-1 ring-white/15"
+                      />
+                    ) : (
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary-500/15 text-xs font-bold text-primary-500">
+                        {(c.username || '?').slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
                     <span className="truncate text-sm font-semibold text-general-100">{c.username}</span>
                     <span className="shrink-0 text-[11px] text-general-400">{timeAgo(c.created_at)}</span>
                   </div>

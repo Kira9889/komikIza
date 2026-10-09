@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { fetchMangaList } from '../api/library'
+import { fetchMangaList, listGenres } from '../api/library'
 import type { Manga } from '../types'
 import MangaCard from '../components/manga/MangaCard'
-import { SearchIcon } from '../icons'
+import { FilterIcon, SearchIcon } from '../icons'
 
 const PAGE_SIZE = 30
 
@@ -24,6 +24,7 @@ export default function Search() {
   const [status, setStatus] = useState('semua')
   const [sort, setSort] = useState('latest')
   const [visible, setVisible] = useState(PAGE_SIZE)
+  const [genreOpen, setGenreOpen] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -34,7 +35,12 @@ export default function Search() {
         item.genres.forEach(genre => names.add(genre.name))
         item.tags.forEach(tag => names.add(tag))
       })
-      setAvailableGenres([...names].sort((a, b) => a.localeCompare(b)))
+      // Gabung dengan daftar genre database biar SEMUA tampil,
+      // termasuk yang kebetulan tidak dipakai judul mana pun.
+      listGenres()
+        .then(list => list.forEach(g => names.add(g.name)))
+        .catch(() => {})
+        .finally(() => setAvailableGenres([...names].sort((a, b) => a.localeCompare(b))))
     }).finally(() => setLoading(false))
   }, [])
 
@@ -68,11 +74,27 @@ export default function Search() {
 
       <div className="grid items-start gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="rounded-2xl border border-(--line) bg-(--card) p-5 lg:sticky lg:top-22">
-          <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold">Genre</h2>{selectedGenres.length > 0 && <button onClick={() => setSelectedGenres([])} className="text-xs font-semibold text-primary-400 hover:text-primary-300">Reset</button>}</div>
-          <div className="relative mt-4"><SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-general-400" /><input value={genreQuery} onChange={event => setGenreQuery(event.target.value)} placeholder="Cari genre" className="input-manga py-2.5! pl-9! text-sm" /></div>
-          <div className="mt-4 flex max-h-58 flex-wrap content-start gap-2 overflow-y-auto pr-1">
-            {genreList.map(genre => <button key={genre} onClick={() => toggleGenre(genre)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${selectedGenres.includes(genre) ? 'bg-primary-500 text-white' : 'bg-white/5 text-general-300 hover:bg-white/10 hover:text-white'}`}>{genre}</button>)}
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-bold">Filter</h2>
+            {selectedGenres.length > 0 && <button onClick={() => setSelectedGenres([])} className="text-xs font-semibold text-primary-400 hover:text-primary-300">Reset genre</button>}
           </div>
+          <button
+            onClick={() => setGenreOpen(true)}
+            className="mt-4 flex w-full items-center justify-between rounded-xl border border-(--line) bg-(--card-2) px-4 py-3 text-sm font-semibold transition hover:border-primary-500/50"
+          >
+            <span className="flex items-center gap-2 text-general-200">
+              <FilterIcon className="h-4 w-4 text-primary-500" />
+              Genre
+              {selectedGenres.length > 0 && (
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">
+                  {selectedGenres.length}
+                </span>
+              )}
+            </span>
+            <span className="max-w-40 truncate text-xs font-normal text-general-400">
+              {selectedGenres.length ? selectedGenres.join(', ') : 'Semua'}
+            </span>
+          </button>
           <FilterGroup title="Tipe">{(['semua', 'manhwa', 'manga', 'manhua'] as const).map(value => <FilterOption key={value} value={value} active={type} onChange={setType} />)}</FilterGroup>
           <FilterGroup title="Status">{(['semua', 'Ongoing', 'Completed', 'Hiatus', 'Dropped'] as const).map(value => <FilterOption key={value} value={value} active={status} onChange={setStatus} />)}</FilterGroup>
         </aside>
@@ -89,6 +111,64 @@ export default function Search() {
           </>}
         </section>
       </div>
+
+      {/* Tombol genre melayang (mobile) */}
+      <button
+        onClick={() => setGenreOpen(true)}
+        aria-label="Pilih genre"
+        className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#15151c] text-red-500 shadow-2xl ring-1 ring-white/10 transition hover:scale-105 lg:hidden"
+      >
+        <FilterIcon className="h-6 w-6" />
+        {selectedGenres.length > 0 && (
+          <span className="absolute -right-1 -top-1 grid h-6 w-6 place-items-center rounded-full bg-primary-500 text-[11px] font-bold text-white">
+            {selectedGenres.length}
+          </span>
+        )}
+      </button>
+
+      {/* Popup genre */}
+      {genreOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+          onClick={() => setGenreOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pilih genre"
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-(--line) bg-(--card) p-5 sm:rounded-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 font-display text-lg font-extrabold">
+                <FilterIcon className="h-5 w-5 text-primary-500" />
+                Genre ({availableGenres.length})
+              </h2>
+              <button
+                onClick={() => setGenreOpen(false)}
+                className="rounded-lg px-3 py-1.5 text-sm font-semibold text-general-400 hover:bg-white/10 hover:text-general-100"
+              >
+                Tutup
+              </button>
+            </div>
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-general-400" />
+              <input value={genreQuery} onChange={event => setGenreQuery(event.target.value)} placeholder="Cari genre" className="input-manga py-2.5! pl-9! text-sm" />
+            </div>
+            <div className="mt-4 flex max-h-72 flex-wrap content-start gap-2 overflow-y-auto pr-1">
+              {genreList.map(genre => <button key={genre} onClick={() => toggleGenre(genre)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${selectedGenres.includes(genre) ? 'bg-primary-500 text-white' : 'bg-white/5 text-general-300 hover:bg-white/10 hover:text-white'}`}>{genre}</button>)}
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button onClick={() => setSelectedGenres([])} className="btn-ghost flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold">
+                Reset
+              </button>
+              <button onClick={() => setGenreOpen(false)} className="btn-primary flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold">
+                Lihat {filtered.length} Judul
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { fetchComments, postComment, deleteComment, uploadCommentImage } from '../../api/library'
 import type { Comment } from '../../types'
 import { useAuth } from '../../context/AuthContext'
+import { STICKER_PACKS, stickerName } from '../../lib/stickers'
 import { MessageIcon, SendIcon, ImageIcon, EyeOffIcon } from '../../icons'
 
 function timeAgo(iso: string): string {
@@ -59,6 +60,8 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
   const [uploadingImg, setUploadingImg] = useState(false)
   const [error, setError] = useState('')
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null)
+  const [stickerOpen, setStickerOpen] = useState(false)
+  const [stickerTab, setStickerTab] = useState(STICKER_PACKS[0].id)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
 
@@ -114,6 +117,12 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
     } finally {
       setSending(false)
     }
+  }
+
+  const insertSticker = (url: string, name: string) => {
+    setBody(prev => (prev.trim() ? `${prev.trim()}\n![${name}](${url})` : `![${name}](${url})`))
+    setStickerOpen(false)
+    taRef.current?.focus()
   }
 
   const onImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,6 +258,15 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
                 <ImageIcon className="h-4 w-4" />
               </button>
               <input ref={imgRef} type="file" accept="image/*" disabled={!user} className="hidden" onChange={onImage} />
+              <button
+                type="button"
+                disabled={!user}
+                onClick={() => setStickerOpen(v => !v)}
+                title="Stiker"
+                className={toolBtn}
+              >
+                <span className="px-0.5 text-sm leading-none">😀</span>
+              </button>
             </div>
             <div className="flex items-center gap-3">
               <span className="font-mono text-xs text-gray-500">{body.trim().length}/1000</span>
@@ -263,6 +281,41 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
             </div>
           </div>
         </div>
+        {stickerOpen && user && (
+          <div className="mt-2 rounded-xl border border-white/10 bg-[#191922] p-3">
+            <div className="mb-2 flex gap-1.5">
+              {STICKER_PACKS.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setStickerTab(p.id)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+                    stickerTab === p.id ? 'bg-primary-500 text-white' : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid max-h-48 grid-cols-6 gap-1.5 overflow-y-auto sm:grid-cols-8">
+              {STICKER_PACKS.find(p => p.id === stickerTab)!.files.map(f => {
+                const name = stickerName(f)
+                const url = `${STICKER_PACKS.find(p => p.id === stickerTab)!.base}/${f}`
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    title={name}
+                    onClick={() => insertSticker(url, name)}
+                    className="rounded-lg p-1 transition hover:bg-white/10"
+                  >
+                    <img src={url} alt={name} loading="lazy" referrerPolicy="no-referrer" className="h-10 w-10 object-contain" />
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
         {replyTo && (
           <p className="mt-2 text-xs text-gray-400">
             Membalas <span className="font-semibold text-primary-400">@{replyTo.username}</span>{' '}

@@ -45,7 +45,7 @@ export default function MangaListCard({ manga }: { manga: Manga }) {
               className="flex w-full items-center justify-between rounded-lg bg-[#0f0f14] px-2.5 py-2 text-left text-xs transition-all hover:bg-black sm:px-3"
             >
               <span className="flex min-w-0 items-center gap-2 font-semibold">
-                <span className="h-2 w-2 shrink-0 rounded-full bg-red-600 shadow-[0_0_6px_#dc2626]" />
+                <span className="h-2 w-2 shrink-0 rounded-full bg-primary-500 shadow-[0_0_6px_var(--accent)]" />
                 <span className="truncate text-general-100">{ch.name}</span>
               </span>
               <span className="shrink-0 pl-2 text-[11px] text-general-400 md:text-xs">

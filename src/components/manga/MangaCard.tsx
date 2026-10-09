@@ -53,7 +53,7 @@ export default function MangaCard({ manga }: { manga: Manga }) {
               className="chapter-border-anim relative flex w-full items-center justify-between rounded-lg bg-black px-2.5 py-2 text-left text-xs transition-all sm:px-3"
             >
               <span className="relative z-10 flex min-w-0 items-center gap-2 font-semibold">
-                <span className="h-2 w-2 shrink-0 rounded-full bg-red-600 shadow-[0_0_6px_#dc2626]" />
+                <span className="h-2 w-2 shrink-0 rounded-full bg-primary-500 shadow-[0_0_6px_var(--accent)]" />
                 <span className="truncate text-general-100">{ch.name}</span>
               </span>
               <span className="relative z-10 shrink-0 pl-2 text-[11px] text-general-400 md:text-xs">

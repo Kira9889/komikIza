@@ -664,21 +664,29 @@ async function getCachedMangaList(force = false) {
     return mangaCache
   }
   const rows = await query(`${MANGA_SELECT} order by m.views_count desc limit 3000`)
-  // Chapter terbaru tiap judul (label "x menit lalu" + sorting Update).
+  // 3 chapter terbaru tiap judul (kartu daftar + label "x menit lalu" + sorting Update).
   const latest = await query(
-    `select distinct on (manga_id) manga_id, id, name, release_timestamp
-     from chapters order by manga_id, release_timestamp desc`,
+    `select manga_id, id, name, release_timestamp from (
+       select manga_id, id, name, release_timestamp,
+              row_number() over (partition by manga_id order by release_timestamp desc) as rn
+       from chapters
+     ) t where rn <= 3`,
   )
-  const latestByManga = new Map(latest.map(r => [r.manga_id, r]))
+  const latestByManga = new Map()
+  for (const r of latest) {
+    if (!latestByManga.has(r.manga_id)) latestByManga.set(r.manga_id, [])
+    latestByManga.get(r.manga_id).push({
+      id: r.id,
+      name: r.name,
+      release_timestamp: Number(r.release_timestamp || 0),
+    })
+  }
   mangaCache = rows.map(row => {
     const m = mapManga(row)
-    const ch = latestByManga.get(row.id)
-    if (ch) {
-      m.latest_chapter = {
-        id: ch.id,
-        name: ch.name,
-        release_timestamp: Number(ch.release_timestamp || 0),
-      }
+    const list = latestByManga.get(row.id) || []
+    if (list.length) {
+      m.latest_chapters = list
+      m.latest_chapter = list[0]
     }
     return m
   })

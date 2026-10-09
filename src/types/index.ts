@@ -63,6 +63,7 @@ export interface Manga {
   release_date: string
   created_at: string
   latest_chapter?: Pick<Chapter, 'id' | 'name' | 'release_timestamp'>
+  latest_chapters?: Pick<Chapter, 'id' | 'name' | 'release_timestamp'>[]
 }
 
 export interface HomeCollections {

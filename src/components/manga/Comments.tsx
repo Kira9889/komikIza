@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchComments, postComment, deleteComment, uploadCommentImage } from '../../api/library'
-import type { Comment } from '../../types'
+import { fetchComments, postComment, deleteComment, uploadCommentImage, searchGifs } from '../../api/library'
+import type { Comment, GifItem } from '../../types'
 import { useAuth } from '../../context/AuthContext'
 import { STICKER_PACKS, stickerName } from '../../lib/stickers'
-import { MessageIcon, SendIcon, ImageIcon, EyeOffIcon } from '../../icons'
+import { MessageIcon, SendIcon, ImageIcon, EyeOffIcon, StickerIcon, GifIcon } from '../../icons'
 
 function timeAgo(iso: string): string {
   const diff = Math.max(0, Date.now() - new Date(iso).getTime())
@@ -62,6 +62,11 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null)
   const [stickerOpen, setStickerOpen] = useState(false)
   const [stickerTab, setStickerTab] = useState(STICKER_PACKS[0].id)
+  const [gifOpen, setGifOpen] = useState(false)
+  const [gifQuery, setGifQuery] = useState('')
+  const [gifs, setGifs] = useState<GifItem[]>([])
+  const [gifLoading, setGifLoading] = useState(false)
+  const [gifError, setGifError] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
 
@@ -122,7 +127,24 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
   const insertSticker = (url: string, name: string) => {
     setBody(prev => (prev.trim() ? `${prev.trim()}\n![${name}](${url})` : `![${name}](${url})`))
     setStickerOpen(false)
+    setGifOpen(false)
     taRef.current?.focus()
+  }
+
+  const doGifSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    const q = gifQuery.trim()
+    if (!q || gifLoading) return
+    setGifLoading(true)
+    setGifError('')
+    try {
+      setGifs(await searchGifs(q))
+    } catch (err: any) {
+      setGifError(err?.message || 'Gagal mencari GIF')
+      setGifs([])
+    } finally {
+      setGifLoading(false)
+    }
   }
 
   const onImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,11 +283,26 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
               <button
                 type="button"
                 disabled={!user}
-                onClick={() => setStickerOpen(v => !v)}
+                onClick={() => {
+                  setStickerOpen(v => !v)
+                  setGifOpen(false)
+                }}
                 title="Stiker"
                 className={toolBtn}
               >
-                <span className="px-0.5 text-sm leading-none">😀</span>
+                <StickerIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                disabled={!user}
+                onClick={() => {
+                  setGifOpen(v => !v)
+                  setStickerOpen(false)
+                }}
+                title="GIF"
+                className={toolBtn}
+              >
+                <GifIcon className="h-4 w-4" />
               </button>
             </div>
             <div className="flex items-center gap-3">
@@ -314,6 +351,45 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
                 )
               })}
             </div>
+          </div>
+        )}
+        {gifOpen && user && (
+          <div className="mt-2 rounded-xl border border-white/10 bg-[#191922] p-3">
+            <form onSubmit={doGifSearch} className="flex gap-2">
+              <input
+                value={gifQuery}
+                onChange={e => setGifQuery(e.target.value)}
+                placeholder="Cari GIF…"
+                className="input-manga py-2! text-sm"
+              />
+              <button
+                type="submit"
+                disabled={gifLoading || !gifQuery.trim()}
+                className="btn-primary shrink-0 rounded-lg px-4 py-2 text-xs font-bold disabled:opacity-60"
+              >
+                {gifLoading ? '…' : 'Cari'}
+              </button>
+            </form>
+            {gifError && (
+              <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                {gifError} Minta admin pasang GIPHY_API_KEY dulu.
+              </p>
+            )}
+            {gifs.length > 0 && (
+              <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                {gifs.map(g => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    title={g.title}
+                    onClick={() => insertSticker(g.full, g.title || 'gif')}
+                    className="overflow-hidden rounded-lg transition hover:ring-2 hover:ring-primary-500"
+                  >
+                    <img src={g.preview} alt={g.title} loading="lazy" className="h-16 w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {replyTo && (

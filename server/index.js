@@ -1125,6 +1125,31 @@ app.post('/api/me/comment-image', avatarLimiter, requireAuth, (req, res) => {
   })
 })
 
+// Cari GIF via Giphy (login wajib — hemat kuota key). Butuh GIPHY_API_KEY
+// di env; tanpa itu endpoint balas 501 dan tombol GIF di UI menjelaskan.
+app.get('/api/gifs/search', commentLimiter, requireAuth, async (req, res) => {
+  try {
+    if (!process.env.GIPHY_API_KEY) {
+      return res.status(501).json({ error: 'Pencarian GIF belum dikonfigurasi admin.' })
+    }
+    const q = String(req.query.q || '').trim().slice(0, 50)
+    if (!q) return res.json([])
+    const url = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(process.env.GIPHY_API_KEY)}&q=${encodeURIComponent(q)}&limit=24&rating=g&lang=id`
+    const r = await fetch(url, { signal: AbortSignal.timeout(15_000) })
+    if (!r.ok) throw new Error(`Giphy HTTP ${r.status}`)
+    const j = await r.json()
+    res.json((j.data || []).map(g => ({
+      id: g.id,
+      title: g.title,
+      preview: g.images?.fixed_height_small?.url || g.images?.preview_gif?.url,
+      full: g.images?.downsized_medium?.url || g.images?.original?.url,
+    })).filter(g => g.preview && g.full))
+  } catch (e) {
+    console.error(e)
+    res.status(502).json({ error: 'Gagal mencari GIF' })
+  }
+})
+
 // ---------------- MANGA (public read) ----------------
 app.get('/api/manga/home', async (_req, res) => {
   try {

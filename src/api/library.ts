@@ -10,7 +10,7 @@ import {
   ensureAuthors as mockEnsureAuthors,
   getChaptersCached,
 } from '../data/store'
-import type { Manga, Genre, Author, Chapter, Comment, AdminComment, Announcement, HomeCollections, MangaInput } from '../types'
+import type { Manga, Genre, Author, Chapter, Comment, AdminComment, Announcement, GifItem, HomeCollections, MangaInput } from '../types'
 
 // ---------------------------------------------------------------
 // PUBLIC READ API
@@ -263,6 +263,10 @@ export async function postComment(mangaId: string, body: string, chapterId?: str
     method: 'POST',
     body: JSON.stringify({ body, chapter_id: chapterId ?? null, parent_id: parentId ?? null }),
   })
+}
+
+export async function searchGifs(q: string): Promise<GifItem[]> {
+  return apiFetch<GifItem[]>('/gifs/search', { query: { q } })
 }
 
 export async function uploadCommentImage(file: File): Promise<string> {

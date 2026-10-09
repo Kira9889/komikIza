@@ -91,6 +91,13 @@ export interface Announcement {
   created_at: string
 }
 
+export interface GifItem {
+  id: string
+  title: string
+  preview: string
+  full: string
+}
+
 export interface AdminComment {
   id: string
   body: string

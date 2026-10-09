@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { fetchMangaList, saveManga, removeManga, importShinigamiCatalog, listGenres } from '../../api/library'
 import type { Manga, MangaInput, MangaType, MangaStatus, Genre } from '../../types'
 import { PlusIcon, EditIcon, TrashIcon } from '../../icons'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 const emptyForm: MangaInput = {
   title: '',
@@ -116,17 +117,21 @@ export default function AdminManga() {
     reload()
   }
 
-  const remove = async (m: Manga) => {
-    if (!confirm(`Hapus "${m.title}"?`)) return
-    await removeManga(m.id)
+  const [pendingDelete, setPendingDelete] = useState<Manga | null>(null)
+  const [confirmImport, setConfirmImport] = useState(false)
+
+  const remove = async () => {
+    if (!pendingDelete) return
+    await removeManga(pendingDelete.id)
     setNotice('Buku dihapus')
+    setPendingDelete(null)
     reload()
   }
 
   const set = (patch: Partial<MangaInput>) => setForm(prev => ({ ...prev, ...patch }))
 
   const importCatalog = async () => {
-    if (!confirm('Impor seluruh katalog Shinigami? Judul yang sama akan dihubungkan ke sumber chapter otomatis.')) return
+    setConfirmImport(false)
     setImporting(true)
     setNotice('Mengimpor katalog Shinigami…')
     try {
@@ -142,13 +147,29 @@ export default function AdminManga() {
 
   return (
     <div>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Hapus buku?"
+        message={pendingDelete ? `"${pendingDelete.title}" beserta semua chapter, komentar, dan favoritnya ikut terhapus. Tidak bisa dibatalkan.` : undefined}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => void remove()}
+      />
+      <ConfirmDialog
+        open={confirmImport}
+        title="Impor katalog Shinigami?"
+        message="Judul yang sama akan dihubungkan ke sumber chapter otomatis. Proses agak lama."
+        confirmLabel="Impor"
+        onCancel={() => setConfirmImport(false)}
+        onConfirm={() => void importCatalog()}
+      />
+
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-extrabold">Buku (Manga)</h1>
           <p className="text-sm text-general-400">Kelola judul, judul alternatif, pengarang, tipe, chapter, tag, dan genre.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={importCatalog} disabled={importing} className="btn-ghost rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
+          <button onClick={() => setConfirmImport(true)} disabled={importing} className="btn-ghost rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50">
             {importing ? 'Mengimpor…' : 'Impor Shinigami'}
           </button>
           <button onClick={openCreate} className="btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold">
@@ -227,7 +248,7 @@ export default function AdminManga() {
                         <button onClick={() => openEdit(m)} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 transition hover:border-primary-500 hover:text-primary-500" aria-label="Edit">
                           <EditIcon className="h-4 w-4" />
                         </button>
-                        <button onClick={() => remove(m)} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-red-400 transition hover:border-red-500" aria-label="Hapus">
+                        <button onClick={() => setPendingDelete(m)} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-red-400 transition hover:border-red-500" aria-label="Hapus">
                           <TrashIcon className="h-4 w-4" />
                         </button>
                       </div>

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { fetchAnnouncements, saveAnnouncement, deleteAnnouncement } from '../../api/library'
 import type { Announcement } from '../../types'
 import { PlusIcon, TrashIcon, EditIcon } from '../../icons'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 export default function AdminAnnouncements() {
   const [items, setItems] = useState<Announcement[]>([])
   const [editing, setEditing] = useState<Announcement | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [error, setError] = useState('')
@@ -49,14 +51,23 @@ export default function AdminAnnouncements() {
     }
   }
 
-  const remove = async (id: string) => {
-    if (!confirm('Hapus pengumuman ini?')) return
-    await deleteAnnouncement(id)
+  const remove = async () => {
+    if (!pendingDelete) return
+    await deleteAnnouncement(pendingDelete)
+    setPendingDelete(null)
     reload()
   }
 
   return (
     <div>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Hapus pengumuman?"
+        message="Tidak bisa dibatalkan."
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => void remove()}
+      />
+
       <h1 className="mb-1 font-display text-2xl font-extrabold">Pengumuman</h1>
       <p className="mb-6 text-sm text-general-400">Tampil di sidebar Home. Yang paling baru di atas.</p>
 
@@ -109,7 +120,7 @@ export default function AdminAnnouncements() {
               <button onClick={() => openEdit(a)} aria-label="Edit" className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 hover:border-primary-500 hover:text-primary-500">
                 <EditIcon className="h-3.5 w-3.5" />
               </button>
-              <button onClick={() => void remove(a.id)} aria-label="Hapus" className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 hover:border-red-500 hover:text-red-500">
+              <button onClick={() => setPendingDelete(a.id)} aria-label="Hapus" className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 hover:border-red-500 hover:text-red-500">
                 <TrashIcon className="h-3.5 w-3.5" />
               </button>
             </div>

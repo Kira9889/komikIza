@@ -5,6 +5,7 @@ import type { Comment, GifItem } from '../../types'
 import { useAuth } from '../../context/AuthContext'
 import { STICKER_PACKS, stickerName } from '../../lib/stickers'
 import { MessageIcon, SendIcon, ImageIcon, EyeOffIcon, StickerIcon, GifIcon } from '../../icons'
+import ConfirmDialog from '../ui/ConfirmDialog'
 
 function timeAgo(iso: string): string {
   const diff = Math.max(0, Date.now() - new Date(iso).getTime())
@@ -60,6 +61,8 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
   const [uploadingImg, setUploadingImg] = useState(false)
   const [error, setError] = useState('')
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [stickerOpen, setStickerOpen] = useState(false)
   const [stickerTab, setStickerTab] = useState(STICKER_PACKS[0].id)
   const [gifOpen, setGifOpen] = useState(false)
@@ -164,12 +167,15 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
   }
 
   const remove = async (id: string) => {
-    if (!confirm('Hapus komentar ini?')) return
+    setDeleting(true)
     try {
       await deleteComment(id)
       setItems(prev => prev.filter(c => c.id !== id && c.parent_id !== id))
+      setPendingDelete(null)
     } catch (e: any) {
       setError(e?.message || 'Gagal menghapus komentar')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -213,7 +219,7 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
           )}
           {canDelete(c) && (
             <button
-              onClick={() => void remove(c.id)}
+              onClick={() => setPendingDelete(c.id)}
               className="text-xs text-gray-500 transition hover:text-red-400"
             >
               Hapus
@@ -415,6 +421,19 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
           <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
         )}
       </form>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Hapus komentar?"
+        message="Komentar dan balasannya ikut terhapus. Tidak bisa dibatalkan."
+        busy={deleting}
+        onCancel={() => {
+          if (!deleting) setPendingDelete(null)
+        }}
+        onConfirm={() => {
+          if (pendingDelete) void remove(pendingDelete)
+        }}
+      />
 
       <div>
         {loading ? (

@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import { fetchAllComments, deleteComment } from '../../api/library'
 import type { AdminComment } from '../../types'
 import { TrashIcon } from '../../icons'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 export default function AdminComments() {
   const [items, setItems] = useState<AdminComment[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<AdminComment | null>(null)
 
   const reload = () => {
     setLoading(true)
@@ -32,10 +34,11 @@ export default function AdminComments() {
     )
   }, [items, query])
 
-  const remove = async (id: string, username: string) => {
-    if (!confirm(`Hapus komentar dari ${username}?`)) return
-    await deleteComment(id)
-    setItems(prev => prev.filter(c => c.id !== id))
+  const remove = async () => {
+    if (!pendingDelete) return
+    await deleteComment(pendingDelete.id)
+    setItems(prev => prev.filter(c => c.id !== pendingDelete.id))
+    setPendingDelete(null)
   }
 
   return (
@@ -54,6 +57,14 @@ export default function AdminComments() {
         />
       </div>
 
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Hapus komentar?"
+        message={pendingDelete ? `Dari ${pendingDelete.username} di ${pendingDelete.manga_title}. Tidak bisa dibatalkan.` : undefined}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => void remove()}
+      />
+
       {loading ? (
         <p className="py-8 text-center text-sm text-general-400">Memuat…</p>
       ) : filtered.length === 0 ? (
@@ -70,7 +81,7 @@ export default function AdminComments() {
                   </span>
                 </div>
                 <button
-                  onClick={() => void remove(c.id, c.username)}
+                  onClick={() => setPendingDelete(c)}
                   aria-label="Hapus komentar"
                   className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-(--line) text-general-400 transition hover:border-red-500 hover:text-red-500"
                 >

@@ -50,7 +50,7 @@ export default function MangaCard({ manga }: { manga: Manga }) {
             <Link
               key={ch.id}
               to={`/manga/${manga.slug}/chapter/${ch.id}`}
-              className="chapter-border-anim relative flex w-full items-center justify-between rounded-lg bg-black px-2.5 py-2 text-left text-xs transition-all sm:px-3"
+              className="chapter-border-anim relative flex w-full items-center justify-between rounded-lg border border-white/5 bg-black/40 px-2.5 py-2 text-left text-xs transition-all sm:px-3"
             >
               <span className="relative z-10 flex min-w-0 items-center gap-2 font-semibold">
                 <span className="h-2 w-2 shrink-0 rounded-full bg-primary-500 shadow-[0_0_6px_var(--accent)]" />

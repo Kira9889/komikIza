@@ -209,7 +209,7 @@ export default function Explore() {
       <button
         onClick={() => setFilterOpen(true)}
         aria-label="Buka filter"
-        className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#15151c] text-red-500 shadow-2xl ring-1 ring-white/10 transition hover:scale-105 md:hidden"
+        className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full border border-(--line) bg-(--card-2) text-primary-500 shadow-2xl transition hover:scale-105 md:hidden"
       >
         <FilterIcon className="h-6 w-6" />
         {activeFilters > 0 && (

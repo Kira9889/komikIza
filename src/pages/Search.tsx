@@ -63,6 +63,13 @@ export default function Search() {
 
   const genreList = availableGenres.filter(genre => genre.toLowerCase().includes(genreQuery.toLowerCase()))
   const toggleGenre = (genre: string) => setSelectedGenres(current => current.includes(genre) ? current.filter(item => item !== genre) : [...current, genre])
+  const activeFilterCount = selectedGenres.length + (type !== 'semua' ? 1 : 0) + (status !== 'semua' ? 1 : 0)
+  const resetAllFilters = () => {
+    setSelectedGenres([])
+    setType('semua')
+    setStatus('semua')
+    setSort('latest')
+  }
   const submit = (event: React.FormEvent) => { event.preventDefault(); setParams(input.trim() ? { q: input.trim() } : {}) }
 
   return (
@@ -72,39 +79,29 @@ export default function Search() {
         <span className="hidden text-sm text-general-400 sm:block">{all.length} judul tersedia</span>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-(--line) bg-(--card) p-5 lg:sticky lg:top-22">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-bold">Filter</h2>
-            {selectedGenres.length > 0 && <button onClick={() => setSelectedGenres([])} className="text-xs font-semibold text-primary-400 hover:text-primary-300">Reset genre</button>}
-          </div>
-          <button
-            onClick={() => setGenreOpen(true)}
-            className="mt-4 flex w-full items-center justify-between rounded-xl border border-(--line) bg-(--card-2) px-4 py-3 text-sm font-semibold transition hover:border-primary-500/50"
-          >
-            <span className="flex items-center gap-2 text-general-200">
-              <FilterIcon className="h-4 w-4 text-primary-500" />
-              Genre
-              {selectedGenres.length > 0 && (
-                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">
-                  {selectedGenres.length}
-                </span>
-              )}
-            </span>
-            <span className="max-w-40 truncate text-xs font-normal text-general-400">
-              {selectedGenres.length ? selectedGenres.join(', ') : 'Semua'}
-            </span>
-          </button>
-          <FilterGroup title="Tipe">{(['semua', 'manhwa', 'manga', 'manhua'] as const).map(value => <FilterOption key={value} value={value} active={type} onChange={setType} />)}</FilterGroup>
-          <FilterGroup title="Status">{(['semua', 'Ongoing', 'Completed', 'Hiatus', 'Dropped'] as const).map(value => <FilterOption key={value} value={value} active={status} onChange={setStatus} />)}</FilterGroup>
-        </aside>
-
+      <div>
         <section>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <form onSubmit={submit} className="relative flex-1"><SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-general-400" /><input value={input} onChange={event => setInput(event.target.value)} placeholder="Cari judul komik…" className="input-manga h-12 pl-12!" /></form>
             <select value={sort} onChange={event => setSort(event.target.value)} className="input-manga h-12 w-full sm:w-40"><option value="latest">Terbaru</option><option value="popular">Populer</option><option value="title">A–Z</option></select>
           </div>
-          <div className="mt-5 flex items-center justify-between border-b border-(--line) pb-3"><p className="text-sm text-general-400">{query ? <>Hasil untuk <span className="font-semibold text-general-100">“{query}”</span></> : 'Semua komik'}</p><span className="text-sm font-semibold text-general-300">{filtered.length} judul</span></div>
+          <div className="mt-5 flex items-center justify-between gap-3 border-b border-(--line) pb-3">
+            <p className="min-w-0 flex-1 truncate text-sm text-general-400">{query ? <>Hasil untuk <span className="font-semibold text-general-100">“{query}”</span></> : 'Semua komik'}</p>
+            <button
+              onClick={() => setGenreOpen(true)}
+              className="relative flex shrink-0 items-center gap-1.5 rounded-lg border border-(--line) bg-(--card) px-3 py-2 text-sm font-semibold text-general-200 transition hover:border-primary-500/50"
+              aria-label="Buka filter"
+            >
+              <FilterIcon className="h-4 w-4 text-primary-500" />
+              <span className="hidden sm:inline">Filter</span>
+              {activeFilterCount > 0 && (
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-primary-500 text-[11px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <span className="shrink-0 text-sm font-semibold text-general-300">{filtered.length} judul</span>
+          </div>
           {loading ? <SearchSkeleton /> : filtered.length === 0 ? <div className="py-20 text-center text-general-400">Tidak ada judul yang sesuai dengan filter pencarian.</div> : <>
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{filtered.slice(0, visible).map(manga => <MangaCard key={manga.id} manga={manga} />)}</div>
             {visible < filtered.length && <div className="mt-8 text-center"><button onClick={() => setVisible(count => count + PAGE_SIZE)} className="btn-ghost rounded-xl px-5 py-2.5 text-sm font-semibold">Tampilkan lebih banyak</button></div>}
@@ -116,7 +113,7 @@ export default function Search() {
       <button
         onClick={() => setGenreOpen(true)}
         aria-label="Pilih genre"
-        className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#15151c] text-red-500 shadow-2xl ring-1 ring-white/10 transition hover:scale-105 lg:hidden"
+        className="fixed bottom-20 right-4 z-40 grid h-14 w-14 place-items-center rounded-full border border-(--line) bg-(--card-2) text-primary-500 shadow-2xl transition hover:scale-105 lg:hidden"
       >
         <FilterIcon className="h-6 w-6" />
         {selectedGenres.length > 0 && (
@@ -155,11 +152,25 @@ export default function Search() {
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-general-400" />
               <input value={genreQuery} onChange={event => setGenreQuery(event.target.value)} placeholder="Cari genre" className="input-manga py-2.5! pl-9! text-sm" />
             </div>
-            <div className="mt-4 flex max-h-72 flex-wrap content-start gap-2 overflow-y-auto pr-1">
+            <div className="mt-4 flex max-h-56 flex-wrap content-start gap-2 overflow-y-auto pr-1">
               {genreList.map(genre => <button key={genre} onClick={() => toggleGenre(genre)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${selectedGenres.includes(genre) ? 'bg-primary-500 text-white' : 'bg-white/5 text-general-300 hover:bg-white/10 hover:text-white'}`}>{genre}</button>)}
             </div>
+            <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-general-400">Tipe</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(['semua', 'manhwa', 'manga', 'manhua'] as const).map(value => <FilterOption key={value} value={value} active={type} onChange={setType} />)}
+                </div>
+              </div>
+              <div>
+                <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-general-400">Status</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(['semua', 'Ongoing', 'Completed', 'Hiatus', 'Dropped'] as const).map(value => <FilterOption key={value} value={value} active={status} onChange={setStatus} />)}
+                </div>
+              </div>
+            </div>
             <div className="mt-5 flex gap-2">
-              <button onClick={() => setSelectedGenres([])} className="btn-ghost flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold">
+              <button onClick={resetAllFilters} className="btn-ghost flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold">
                 Reset
               </button>
               <button onClick={() => setGenreOpen(false)} className="btn-primary flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold">
@@ -171,10 +182,6 @@ export default function Search() {
       )}
     </div>
   )
-}
-
-function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  return <div className="mt-6 border-t border-(--line) pt-5"><h3 className="font-display text-base font-bold">{title}</h3><div className="mt-3 flex flex-wrap gap-2">{children}</div></div>
 }
 
 function FilterOption({ value, active, onChange }: { value: string; active: string; onChange: (value: string) => void }) {

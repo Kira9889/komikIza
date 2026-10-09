@@ -131,8 +131,7 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
     taRef.current?.focus()
   }
 
-  const doGifSearch = async (e?: React.FormEvent) => {
-    e?.preventDefault()
+  const doGifSearch = async () => {
     const q = gifQuery.trim()
     if (!q || gifLoading) return
     setGifLoading(true)
@@ -355,21 +354,28 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
         )}
         {gifOpen && user && (
           <div className="mt-2 rounded-xl border border-white/10 bg-[#191922] p-3">
-            <form onSubmit={doGifSearch} className="flex gap-2">
+            <div className="flex gap-2">
               <input
                 value={gifQuery}
                 onChange={e => setGifQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void doGifSearch()
+                  }
+                }}
                 placeholder="Cari GIF…"
                 className="input-manga py-2! text-sm"
               />
               <button
-                type="submit"
+                type="button"
+                onClick={() => void doGifSearch()}
                 disabled={gifLoading || !gifQuery.trim()}
                 className="btn-primary shrink-0 rounded-lg px-4 py-2 text-xs font-bold disabled:opacity-60"
               >
                 {gifLoading ? '…' : 'Cari'}
               </button>
-            </form>
+            </div>
             {gifError && (
               <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
                 {gifError} Minta admin pasang GIPHY_API_KEY dulu.

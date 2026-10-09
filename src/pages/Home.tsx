@@ -17,8 +17,10 @@ export default function Home() {
   const [announcements, setAnnouncements] = useState<Announcement[]>(DEFAULT_ANNOUNCEMENTS)
 
   useEffect(() => {
+    // null = backend mati (pakai bawaan). Array kosong = admin memang
+    // menghapus semua → tampilkan pesan kosong, BUKAN bawaan.
     fetchAnnouncements().then(list => {
-      if (list.length) setAnnouncements(list)
+      setAnnouncements(list ?? DEFAULT_ANNOUNCEMENTS)
     }).catch(() => {})
   }, [])
 
@@ -57,14 +59,20 @@ export default function Home() {
               <Link to="#" className="text-sm text-general-400 hover:text-primary-500">Semua</Link>
             </div>
             <div className="space-y-3">
-              {announcements.map(a => (
-                <Announcement
-                  key={a.id}
-                  title={a.title}
-                  time={timeAgo(a.created_at, now)}
-                  body={a.body}
-                />
-              ))}
+              {announcements.length === 0 ? (
+                <p className="rounded-lg border border-(--line) bg-(--card-2) px-3 py-6 text-center text-xs text-general-400">
+                  Tidak ada pengumuman.
+                </p>
+              ) : (
+                announcements.map(a => (
+                  <Announcement
+                    key={a.id}
+                    title={a.title}
+                    time={timeAgo(a.created_at, now)}
+                    body={a.body}
+                  />
+                ))
+              )}
             </div>
           </aside>
         </div>

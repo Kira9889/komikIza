@@ -12,7 +12,7 @@ export default function AdminAnnouncements() {
   const [saving, setSaving] = useState(false)
 
   const reload = () => {
-    fetchAnnouncements().then(setItems).catch(() => {})
+    fetchAnnouncements().then(list => setItems(list ?? [])).catch(() => {})
   }
 
   useEffect(() => {

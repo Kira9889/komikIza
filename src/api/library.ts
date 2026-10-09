@@ -287,12 +287,12 @@ export async function deleteComment(id: string): Promise<void> {
 // ---------------------------------------------------------------
 // PENGUMUMAN (baca publik, tulis admin)
 // ---------------------------------------------------------------
-export async function fetchAnnouncements(): Promise<Announcement[]> {
+export async function fetchAnnouncements(): Promise<Announcement[] | null> {
   try {
     return await apiFetch<Announcement[]>('/announcements')
   } catch (e) {
     console.error(e)
-    return []
+    return null
   }
 }
 

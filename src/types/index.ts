@@ -81,6 +81,7 @@ export interface Comment {
   username: string
   avatar_url?: string
   chapter_id?: string | null
+  parent_id?: string | null
 }
 
 export interface Announcement {

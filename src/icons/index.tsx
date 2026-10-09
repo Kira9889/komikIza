@@ -206,3 +206,19 @@ export function ListIcon(props: IconProps) {
 export function FilterIcon(props: IconProps) {
   return <svg {...base(props)}><path d="M4 5h16l-6.5 7.5V19l-3 2v-8.5L4 5Z" /></svg>
 }
+
+export function MessageIcon(props: IconProps) {
+  return <svg {...base(props)}><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" /></svg>
+}
+
+export function SendIcon(props: IconProps) {
+  return <svg {...base(props)}><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" /><path d="m21.854 2.147-10.94 10.939" /></svg>
+}
+
+export function ImageIcon(props: IconProps) {
+  return <svg {...base(props)}><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+}
+
+export function EyeOffIcon(props: IconProps) {
+  return <svg {...base(props)}><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></svg>
+}

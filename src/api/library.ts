@@ -258,11 +258,22 @@ export async function fetchComments(mangaId: string, chapterId?: string): Promis
   }
 }
 
-export async function postComment(mangaId: string, body: string, chapterId?: string): Promise<Comment> {
+export async function postComment(mangaId: string, body: string, chapterId?: string, parentId?: string): Promise<Comment> {
   return apiFetch<Comment>(`/manga/${mangaId}/comments`, {
     method: 'POST',
-    body: JSON.stringify({ body, chapter_id: chapterId ?? null }),
+    body: JSON.stringify({ body, chapter_id: chapterId ?? null, parent_id: parentId ?? null }),
   })
+}
+
+export async function uploadCommentImage(file: File): Promise<string> {
+  if (file.size > 2 * 1024 * 1024) throw new Error('Ukuran maksimal 2MB')
+  if (!/^(image\/jpeg|image\/png|image\/webp|image\/gif)$/.test(file.type)) {
+    throw new Error('Format harus JPG, PNG, WebP, atau GIF')
+  }
+  const fd = new FormData()
+  fd.append('image', file)
+  const res = await apiFetch<{ url: string }>('/me/comment-image', { method: 'POST', body: fd })
+  return res.url
 }
 
 export async function deleteComment(id: string): Promise<void> {

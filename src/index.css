@@ -187,6 +187,33 @@ body {
     transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  /* Spoiler komentar: klik ringkasan untuk buka/tutup. */
+  .comment-spoiler {
+    margin-top: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .comment-spoiler > summary {
+    cursor: pointer;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--muted);
+    list-style: none;
+    user-select: none;
+  }
+  .comment-spoiler > summary::-webkit-details-marker {
+    display: none;
+  }
+  .comment-spoiler > summary:hover {
+    color: var(--accent);
+  }
+  .comment-spoiler > div {
+    padding: 0.2rem 0.8rem 0.7rem;
+  }
+}
+
   /* Garis cahaya ungu muter di border baris chapter (kartu daftar). */
   .chapter-border-anim {
     position: relative;
@@ -216,4 +243,3 @@ body {
       animation: none;
     }
   }
-}

@@ -11,7 +11,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
-import { randomInt } from 'node:crypto'
+import { randomInt, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -1098,6 +1098,33 @@ app.post('/api/me/avatar', avatarLimiter, requireAuth, (req, res) => {
   })
 })
 
+// Gambar lampiran komentar (login wajib). Disimpan ke R2: comments/<uuid>.<ext>,
+// lalu URL-nya ditempel user sebagai markdown ![img](url) di isi komentar.
+app.post('/api/me/comment-image', avatarLimiter, requireAuth, (req, res) => {
+  avatarUpload.single('image')(req, res, async err => {
+    try {
+      if (err) return res.status(400).json({ error: err.message || 'Upload gagal' })
+      if (!req.file) return res.status(400).json({ error: 'Pilih gambar dulu' })
+      const s3 = getAvatarS3()
+      const bucket = process.env.R2_BUCKET || 'chapter'
+      const publicBase = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '')
+      if (!s3 || !publicBase) return res.status(500).json({ error: 'Upload gambar belum dikonfigurasi di server.' })
+      const ext = AVATAR_MIMES[req.file.mimetype]
+      const key = `comments/${randomUUID()}.${ext}`
+      await s3.send(new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      }))
+      res.json({ url: `${publicBase}/${key}` })
+    } catch (e) {
+      console.error(e)
+      res.status(500).json({ error: 'Gagal mengunggah gambar' })
+    }
+  })
+})
+
 // ---------------- MANGA (public read) ----------------
 app.get('/api/manga/home', async (_req, res) => {
   try {
@@ -1595,17 +1622,15 @@ app.get('/api/manga/:mangaId/comments', async (req, res) => {
     // komentar judul (untuk halaman detail).
     const chapterId = String(req.query.chapter_id || '')
     if (chapterId && !isValidUuid(chapterId)) return res.status(400).json({ error: 'ID chapter tidak valid' })
+    const base = `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, c.parent_id, m.username, m.avatar_url
+         from comments c join members m on m.id = c.user_id`
     const rows = chapterId
       ? await query(
-        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username, m.avatar_url
-         from comments c join members m on m.id = c.user_id
-         where c.manga_id = $1 and c.chapter_id = $2 order by c.created_at desc limit $3`,
+        `${base} where c.manga_id = $1 and c.chapter_id = $2 order by c.created_at desc limit $3`,
         [mangaId, chapterId, limit],
       )
       : await query(
-        `select c.id, c.body, c.created_at, c.user_id, c.chapter_id, m.username, m.avatar_url
-         from comments c join members m on m.id = c.user_id
-         where c.manga_id = $1 order by c.created_at desc limit $2`,
+        `${base} where c.manga_id = $1 order by c.created_at desc limit $2`,
         [mangaId, limit],
       )
     res.json(rows.map(r => ({
@@ -1616,6 +1641,7 @@ app.get('/api/manga/:mangaId/comments', async (req, res) => {
       username: r.username,
       avatar_url: r.avatar_url || undefined,
       chapter_id: r.chapter_id,
+      parent_id: r.parent_id,
     })))
   } catch (e) {
     console.error(e)
@@ -1638,12 +1664,23 @@ app.post('/api/manga/:mangaId/comments', commentLimiter, requireAuth, async (req
       const ch = await query('select id from chapters where id = $1 and manga_id = $2', [chapterId, mangaId])
       if (!ch[0]) return res.status(404).json({ error: 'Chapter tidak ditemukan di judul ini' })
     }
+    // Balasan harus nempel di komentar induk yang ruangnya sama
+    // (judul + chapter yang sama, bukan chapter lain).
+    const parentId = (req.body || {}).parent_id ? String((req.body || {}).parent_id) : null
+    if (parentId) {
+      if (!isValidUuid(parentId)) return res.status(400).json({ error: 'ID balasan tidak valid' })
+      const parent = await query('select manga_id, chapter_id from comments where id = $1', [parentId])
+      if (!parent[0]) return res.status(404).json({ error: 'Komentar yang dibalas tidak ada' })
+      const sameScope = parent[0].manga_id === mangaId &&
+        String(parent[0].chapter_id || '') === String(chapterId || '')
+      if (!sameScope) return res.status(400).json({ error: 'Balasan harus di ruang yang sama' })
+    }
     const rows = await query(
-      `insert into comments (manga_id, chapter_id, user_id, body) values ($1, $2, $3, $4)
-       returning id, body, created_at, chapter_id`,
-      [mangaId, chapterId, req.user.id, body],
+      `insert into comments (manga_id, chapter_id, parent_id, user_id, body) values ($1, $2, $3, $4, $5)
+       returning id, body, created_at, chapter_id, parent_id`,
+      [mangaId, chapterId, parentId, req.user.id, body],
     )
-    res.json({ id: rows[0].id, body: rows[0].body, created_at: rows[0].created_at, user_id: req.user.id, username: req.user.username, avatar_url: req.user.avatar_url || undefined, chapter_id: rows[0].chapter_id })
+    res.json({ id: rows[0].id, body: rows[0].body, created_at: rows[0].created_at, user_id: req.user.id, username: req.user.username, avatar_url: req.user.avatar_url || undefined, chapter_id: rows[0].chapter_id, parent_id: rows[0].parent_id })
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengirim komentar' })

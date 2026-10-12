@@ -2,8 +2,14 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "main": ".open-next/worker.js",
   "name": "tenshi-my-id",
-  "compatibility_date": "2026-10-13",
+  "compatibility_date": "2026-10-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "vars": {
+    "API_SERVER_URL": "https://izalib-api.onrender.com/api",
+    "NEXT_PUBLIC_API_URL": "https://izalib-api.onrender.com/api"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

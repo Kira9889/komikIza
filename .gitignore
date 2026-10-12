@@ -4,4 +4,5 @@ dist/
 .env.local
 server/.env
 server/backups/
+server/.sync-last-run
 *.log

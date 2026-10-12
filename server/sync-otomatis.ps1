@@ -32,6 +32,13 @@ if ((Test-Path -LiteralPath $stampFile) -and ((Get-Content -LiteralPath $stampFi
 
 & {
   Write-Output (& $stamp 'MULAI sync otomatis')
+  # Impor katalog dulu: judul + bookmark BARU dari Shinigami masuk DB di sini.
+  # Tanpa ini, sync chapter di bawah cuma mengurus judul yang sudah ada.
+  Write-Output (& $stamp 'Impor katalog (judul baru)')
+  node sync-shinigami.mjs --import
+  if ($LASTEXITCODE -ne 0) {
+    Write-Output (& $stamp "Impor katalog exit=$LASTEXITCODE (lanjut chapter)")
+  }
   for ($o = 0; $o -lt 1000; $o += 100) {
     Write-Output (& $stamp "Batch offset=$o limit=100")
     node sync-shinigami.mjs --limit=100 --offset=$o --workers=3 --jobs=1

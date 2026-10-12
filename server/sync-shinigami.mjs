@@ -280,6 +280,14 @@ async function main() {
     mangas = mangas.filter(m => m.id === args.manga || m.slug === args.manga)
     if (!mangas.length) throw new Error(`Judul ${args.manga} tidak ditemukan / tidak punya shinigami_id`)
   }
+  // --new: hanya judul yang BELUM punya chapter sama sekali (bookmark baru
+  // hasil impor). Dipakai malam hari tepat setelah --import agar judul baru
+  // langsung isi chapter tanpa nunggu giliran rotasi.
+  if (args.new) {
+    const ids = (await query('select distinct manga_id as id from chapters')).map(r => r.id)
+    const empty = new Set(mangas.map(m => m.id).filter(id => !ids.includes(id)))
+    mangas = mangas.filter(m => empty.has(m.id))
+  }
   const offset = Number(args.offset || 0)
   const limit = args.limit ? Number(args.limit) : mangas.length
   mangas = mangas.slice(offset, offset + limit)

@@ -83,12 +83,9 @@ async function ensureSchema() {
   // Seed pengumuman awal SEKALI seumur hidup (penanda di schema_seeds).
   // Syarat "tabel kosong" saja tidak cukup: admin yang menghapus semua
   // pengumuman akan terus diisi ulang tiap restart kalau pakai itu.
-  await query(`create table if not exists public.schema_seeds (
-    name text primary key, applied_at timestamptz not null default now()
-  )`)
-  const seeded = await query(`select 1 from schema_seeds where name = 'announcements-v1'`)
+  const seeded = await query(`select 1 from public.schema_seeds where name = 'announcements-v1'`)
   if (!seeded[0]) {
-    await query(`insert into schema_seeds (name) values ('announcements-v1') on conflict do nothing`)
+    await query(`insert into public.schema_seeds (name) values ('announcements-v1') on conflict do nothing`)
     await query(
       `insert into announcements (title, body, created_at) values
        ($1, $2, $3), ($4, $5, $6), ($7, $8, $9)`,

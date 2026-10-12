@@ -239,6 +239,11 @@ create table if not exists public.announcements (
 -- lewat REST API Supabase.
 -- JANGAN pakai FORCE — backend owner harus tetap bypass.
 -- ------------------------------------------------------------
+create table if not exists public.schema_seeds (
+  name       text primary key,
+  applied_at timestamptz not null default now()
+);
+
 alter table public.members enable row level security;
 alter table public.email_verification_codes enable row level security;
 alter table public.manga enable row level security;

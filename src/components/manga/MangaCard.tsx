@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import type { Manga } from '../../types'
-import { timeAgo } from '../../lib/time'
 import { displayRating, displayViews } from '../../lib/stats'
 import { EyeIcon } from '../../icons'
 
@@ -14,7 +13,7 @@ function formatCompact(n: number) {
 export default function MangaCard({ manga }: { manga: Manga }) {
   const rows = (manga.latest_chapters?.length ? manga.latest_chapters : manga.latest_chapter ? [manga.latest_chapter] : []).slice(0, 3)
   return (
-    <div className="card-manga group flex cursor-pointer flex-col overflow-hidden rounded-lg shadow-md transition-all duration-300 hover:shadow-xl">
+    <div className="card-manga group flex h-full cursor-pointer flex-col overflow-hidden rounded-xl shadow-md transition-all duration-300 hover:shadow-xl">
       <Link to={`/manga/${manga.slug}`} className="relative block aspect-[3/4] overflow-hidden bg-(--card-2)">
         <img
           src={manga.cover_url}
@@ -34,15 +33,15 @@ export default function MangaCard({ manga }: { manga: Manga }) {
           ★ {displayRating(manga).toFixed(1)}
         </span>
       </Link>
-      <div className="flex min-h-48 flex-col p-3">
+      <div className="flex min-h-[13rem] flex-1 flex-col p-2.5 sm:p-3">
         <Link to={`/manga/${manga.slug}`} className="mb-2 block min-h-11">
-          <h3 className="line-clamp-2 font-bold text-xs text-general-100 transition-colors group-hover:text-primary-500 md:text-sm">
+          <h3 className="line-clamp-2 text-xs font-bold leading-5 text-general-100 transition-colors group-hover:text-primary-500 sm:text-sm">
             {manga.title}
           </h3>
         </Link>
-        <div className="mt-auto space-y-2">
+        <div className="mt-auto min-h-[7.5rem] space-y-1.5">
           {rows.length === 0 && (
-            <span className="block rounded-lg bg-black px-2.5 py-2 text-xs text-general-400">
+            <span className="flex h-9 items-center rounded-lg bg-black/40 px-2.5 text-xs text-general-400">
               Sedang tayang
             </span>
           )}
@@ -50,14 +49,11 @@ export default function MangaCard({ manga }: { manga: Manga }) {
             <Link
               key={ch.id}
               to={`/manga/${manga.slug}/chapter/${ch.id}`}
-              className="chapter-border-anim relative flex w-full items-center justify-between rounded-lg border border-white/5 bg-black/40 px-2.5 py-2 text-left text-xs transition-all sm:px-3"
+              className="chapter-border-anim relative flex h-9 w-full items-center rounded-lg border border-white/5 bg-black/30 px-2 text-left text-xs transition-all hover:bg-black/50 sm:px-2.5"
             >
               <span className="relative z-10 flex min-w-0 items-center gap-2 font-semibold">
                 <span className="h-2 w-2 shrink-0 rounded-full bg-primary-500 shadow-[0_0_6px_var(--accent)]" />
                 <span className="truncate text-general-100">{ch.name}</span>
-              </span>
-              <span className="relative z-10 shrink-0 pl-2 text-[11px] text-general-400 md:text-xs">
-                {ch.release_timestamp ? timeAgo(ch.release_timestamp) : ''}
               </span>
             </Link>
           ))}

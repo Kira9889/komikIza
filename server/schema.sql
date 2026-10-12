@@ -252,4 +252,5 @@ alter table public.history enable row level security;
 alter table public.read_chapters enable row level security;
 alter table public.comments enable row level security;
 alter table public.announcements enable row level security;
+alter table public.schema_seeds enable row level security;
 

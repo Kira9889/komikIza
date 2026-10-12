@@ -30,6 +30,8 @@ if ((Test-Path -LiteralPath $stampFile) -and ((Get-Content -LiteralPath $stampFi
   exit 0
 }
 
+$wantFull = $args -contains '-Full'
+
 & {
   Write-Output (& $stamp 'MULAI sync otomatis')
   # Impor katalog dulu: judul + bookmark BARU dari Shinigami masuk DB di sini.
@@ -39,7 +41,17 @@ if ((Test-Path -LiteralPath $stampFile) -and ((Get-Content -LiteralPath $stampFi
   if ($LASTEXITCODE -ne 0) {
     Write-Output (& $stamp "Impor katalog exit=$LASTEXITCODE (lanjut chapter)")
   }
-  for ($o = 0; $o -lt 1000; $o += 100) {
+  # Bagi beban: tiap malam cuma 200 judul, rotasi per tanggal (full 1000
+  # kelar dalam 5 malam). Parameter -Full untuk sapu semua sekaligus.
+  # Contoh manual penuh: .\sync-otomatis.ps1 -Full
+  if ($wantFull) {
+    $ranges = @(0, 100, 200, 300, 400, 500, 600, 700, 800, 900)
+  } else {
+    $dayIdx = ((Get-Date).DayOfYear % 5)
+    $ranges = @(($dayIdx * 200), ($dayIdx * 200) + 100)
+    Write-Output (& $stamp "Jatah malam ini: offset $($ranges[0])-${($ranges[1])} (rotasi harian, -Full untuk semua)")
+  }
+  foreach ($o in $ranges) {
     Write-Output (& $stamp "Batch offset=$o limit=100")
     node sync-shinigami.mjs --limit=100 --offset=$o --workers=3 --jobs=1
     if ($LASTEXITCODE -ne 0) {

@@ -139,7 +139,7 @@ export default function AdminManga() {
       setNotice(`${result.imported} judul disinkronkan (${result.linked} judul lokal dihubungkan).`)
       reload()
     } catch (e: any) {
-      setNotice(`Impor gagal: ${e.message || 'coba lagi'}`)
+      setNotice(`Impor gagal: ${e.message || 'coba lagi'}. Catatan: impor dari hosting tidak bisa (IP server diblokir sumber) — jalankan dari laptop: node sync-shinigami.mjs --import`)
     } finally {
       setImporting(false)
     }

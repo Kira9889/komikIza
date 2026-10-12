@@ -350,9 +350,9 @@ function mockHomeCollections(): HomeCollections {
       manhua: storeManga.filter(m => m.type === 'manhua').slice(0, 6),
     },
     popular: {
-      daily: byViews.slice(0, 8),
-      weekly: storeManga.slice(0, 8),
-      all: byFollows.slice(0, 8),
+      daily: byViews.slice(0, 10),
+      weekly: storeManga.slice(0, 10),
+      all: byFollows.slice(0, 10),
     },
   }
 }

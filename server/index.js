@@ -1177,9 +1177,9 @@ app.get('/api/manga/home', async (_req, res) => {
         manhua: list.filter(m => m.type === 'manhua').slice(0, 6),
       },
       popular: {
-        daily: byShiniViews.slice(0, 8),
-        weekly: byShiniBookmarks.slice(0, 8),
-        all: byFollows.slice(0, 8),
+        daily: byShiniViews.slice(0, 10),
+        weekly: byShiniBookmarks.slice(0, 10),
+        all: byFollows.slice(0, 10),
       },
     })
   } catch (e) {

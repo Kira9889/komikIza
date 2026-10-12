@@ -13,14 +13,13 @@ export default function Home() {
   const [updTab, setUpdTab] = useState('project')
   // Jam berjalan agar label waktu pengumuman selalu real-time.
   const [now, setNow] = useState(() => Date.now())
-  // Pengumuman dari backend (dikelola Admin); fallback ke bawaan bila offline.
-  const [announcements, setAnnouncements] = useState<Announcement[]>(DEFAULT_ANNOUNCEMENTS)
+  // Pengumuman hanya berasal dari backend agar yang sudah dihapus admin tidak muncul lagi.
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
 
   useEffect(() => {
-    // null = backend mati (pakai bawaan). Array kosong = admin memang
-    // menghapus semua → tampilkan pesan kosong, BUKAN bawaan.
+    // Backend gagal atau daftar kosong: jangan munculkan ulang pengumuman bawaan.
     fetchAnnouncements().then(list => {
-      setAnnouncements(list ?? DEFAULT_ANNOUNCEMENTS)
+      setAnnouncements(list ?? [])
     }).catch(() => {})
   }, [])
 
@@ -135,7 +134,7 @@ export default function Home() {
             onChange={setPopTab}
           />
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8">
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6">
           {pop.map(m => (
             <MangaCard key={m.id} manga={m} />
           ))}
@@ -144,28 +143,6 @@ export default function Home() {
     </div>
   )
 }
-
-// Fallback bila backend offline — versi online dikelola dari panel Admin.
-const DEFAULT_ANNOUNCEMENTS: Announcement[] = [
-  {
-    id: 'default-1',
-    title: 'Mode Baca Imersif',
-    created_at: '2026-09-14T22:47:35+07:00',
-    body: 'Navbar dan menu bawah kini otomatis sembunyi saat membaca chapter agar tidak menutupi tombol prev/next. Ketuk gambar untuk memunculkannya lagi. Daftar chapter juga bisa diurutkan Terbaru/Terlama.',
-  },
-  {
-    id: 'default-2',
-    title: 'Koneksi Lebih Stabil',
-    created_at: '2026-09-14T23:27:03+07:00',
-    body: 'Indikator loading baru saat server aktif kembali dari mode tidur, tombol Coba lagi saat gagal memuat, plus penjaga otomatis tiap 4 menit agar database tidak tidur.',
-  },
-  {
-    id: 'default-3',
-    title: 'Lebih Ringan & Cepat',
-    created_at: '2026-09-14T23:35:57+07:00',
-    body: 'Logo baru Tenshi.id yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
-  },
-]
 
 function timeAgo(iso: string, now: number): string {
   const diff = Math.max(0, now - new Date(iso).getTime())

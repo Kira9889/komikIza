@@ -1,4 +1,4 @@
-# Tenshi.id — sync otomatis Shinigami -> Supabase (WAJIB jalan dari IP rumah,
+# Tenshi.My.id — sync otomatis Shinigami -> Supabase (WAJIB jalan dari IP rumah,
 # karena IP datacenter seperti Render diblokir api.shngm.io).
 #
 # Cara pakai manual: klik kanan file ini > Run with PowerShell.

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { fetchMangaList, listGenres } from '../api/library'
 import type { Manga } from '../types'
+import { queryKeys } from '../lib/queryKeys'
 import MangaCard from '../components/manga/MangaCard'
 import { FilterIcon, SearchIcon } from '../icons'
 
@@ -15,10 +17,11 @@ export default function Search() {
   const [params, setParams] = useSearchParams()
   const query = params.get('q') ?? ''
   const [input, setInput] = useState(query)
-  const [all, setAll] = useState<Manga[]>([])
-  const [loading, setLoading] = useState(true)
+  const mangaQuery = useQuery({ queryKey: queryKeys.mangaList, queryFn: () => fetchMangaList() })
+  const genresQuery = useQuery({ queryKey: queryKeys.genres, queryFn: listGenres })
+  const all: Manga[] = mangaQuery.data ?? []
+  const loading = mangaQuery.isPending
   const [genreQuery, setGenreQuery] = useState('')
-  const [availableGenres, setAvailableGenres] = useState<string[]>([])
   const [selectedGenres, setSelectedGenres] = useState<string[]>([])
   const [type, setType] = useState('semua')
   const [status, setStatus] = useState('semua')
@@ -26,26 +29,18 @@ export default function Search() {
   const [visible, setVisible] = useState(PAGE_SIZE)
   const [genreOpen, setGenreOpen] = useState(false)
 
-  useEffect(() => {
-    setLoading(true)
-    fetchMangaList().then(items => {
-      setAll(items)
-      const names = new Set<string>()
-      items.forEach(item => {
-        item.genres.forEach(genre => names.add(genre.name))
-        item.tags.forEach(tag => names.add(tag))
-      })
-      // Gabung dengan daftar genre database biar SEMUA tampil,
-      // termasuk yang kebetulan tidak dipakai judul mana pun.
-      listGenres()
-        .then(list => list.forEach(g => names.add(g.name)))
-        .catch(() => {})
-        .finally(() => setAvailableGenres([...names].sort((a, b) => a.localeCompare(b))))
-    }).finally(() => setLoading(false))
-  }, [])
+  const availableGenres = useMemo(() => {
+    const names = new Set<string>()
+    all.forEach(item => {
+      item.genres.forEach(genre => names.add(genre.name))
+      item.tags.forEach(tag => names.add(tag))
+    })
+    genresQuery.data?.forEach(genre => names.add(genre.name))
+    return [...names].sort((a, b) => a.localeCompare(b))
+  }, [all, genresQuery.data])
 
   useEffect(() => {
-    document.title = query ? `Cari ${query} — Tenshi.id` : 'Cari Komik — Tenshi.id'
+    document.title = query ? `Cari ${query} — Tenshi.My.id` : 'Cari Komik — Tenshi.My.id'
   }, [query])
   useEffect(() => setInput(query), [query])
   useEffect(() => setVisible(PAGE_SIZE), [query, selectedGenres, type, status, sort])

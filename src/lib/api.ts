@@ -1,10 +1,12 @@
-const API_BASE: string =
-  (import.meta.env.VITE_API_URL as string | undefined) || '/api'
+const API_BASE: string = typeof window === 'undefined'
+  ? process.env.API_SERVER_URL || (process.env.NODE_ENV === 'development' ? 'http://127.0.0.1:5001/api' : 'https://api.tenshi.my.id/api')
+  : process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'development' ? '/api' : 'https://api.tenshi.my.id/api')
 
 const TOKEN_KEY = 'tenshi_token'
 const LEGACY_TOKEN_KEY = 'izalib_token'
 
 export function getToken(): string | null {
+  if (typeof window === 'undefined') return null
   const current = localStorage.getItem(TOKEN_KEY)
   if (current) return current
   // Migrasi sekali dari key lama IzaLib
@@ -18,6 +20,7 @@ export function getToken(): string | null {
 }
 
 export function setToken(token: string | null) {
+  if (typeof window === 'undefined') return
   if (token) localStorage.setItem(TOKEN_KEY, token)
   else localStorage.removeItem(TOKEN_KEY)
 }
@@ -57,7 +60,7 @@ export async function apiFetch<T = any>(
   const headers: Record<string, string> = {}
   // FormData (upload file) harus pakai boundary otomatis browser — jangan
   // timpa Content-Type, nanti gagal parse di server.
-  if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json'
+  if (!(typeof FormData !== 'undefined' && options.body instanceof FormData)) headers['Content-Type'] = 'application/json'
   if (token) headers.Authorization = `Bearer ${token}`
   if (options.headers) Object.assign(headers, options.headers)
 

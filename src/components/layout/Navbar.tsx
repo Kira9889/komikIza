@@ -60,7 +60,11 @@ export default function Navbar() {
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const [dark, setDark] = useState(true)
+
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains('dark'))
+  }, [])
   const [showProfile, setShowProfile] = useState(false)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -84,7 +88,7 @@ export default function Navbar() {
         <NavLink to="/" className="flex items-center gap-2" onClick={closeMenu}>
           <Logo size={48} />
           <span className="font-display text-xl font-extrabold tracking-tight">
-            Tenshi<span className="text-primary-500">.id</span>
+            Tenshi<span className="text-primary-500">.My.id</span>
           </span>
         </NavLink>
 

@@ -10,6 +10,7 @@ import nodemailer from 'nodemailer'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
+import { announcementSchema, loginSchema, mangaInputSchema, registerSchema } from './validation.js'
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { randomInt, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -97,7 +98,7 @@ async function ensureSchema() {
         'Indikator loading baru saat server aktif kembali dari mode tidur, tombol Coba lagi saat gagal memuat, plus penjaga otomatis tiap 4 menit agar database tidak tidur.',
         '2026-09-14T23:27:03+07:00',
         'Lebih Ringan & Cepat',
-        'Logo baru Tenshi.id yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
+        'Logo baru Tenshi.My.id yang ringan, halaman dimuat terpisah agar buka awal lebih cepat, daftar chapter dimuat ringkas, dan navigasi halaman Explore lebih simpel.',
         '2026-09-14T23:35:57+07:00',
       ],
     )
@@ -194,7 +195,7 @@ async function sendCodeEmail(email, code) {
   // verifikasi domain, isi RESEND_API_KEY (+ RESEND_FROM opsional).
   if (process.env.RESEND_API_KEY) {
     try {
-      const from = process.env.RESEND_FROM || 'Tenshi.id <noreply@tenshi.my.id>'
+      const from = process.env.RESEND_FROM || 'Tenshi.My.id <noreply@tenshi.my.id>'
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -204,9 +205,9 @@ async function sendCodeEmail(email, code) {
         body: JSON.stringify({
           from,
           to: email,
-          subject: `Kode verifikasi Tenshi.id: ${code}`,
+          subject: `Kode verifikasi Tenshi.My.id: ${code}`,
           html: `<div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #eee;border-radius:12px">
-        <h2 style="margin:0 0 8px">Tenshi<span style="color:#6f39ee">.id</span></h2>
+        <h2 style="margin:0 0 8px">Tenshi<span style="color:#6f39ee">.My.id</span></h2>
         <p>Kode verifikasi kamu:</p>
         <p style="font-size:32px;font-weight:800;letter-spacing:8px;margin:8px 0">${code}</p>
         <p style="color:#888;font-size:13px">Berlaku 10 menit. Jangan bagikan ke siapa pun.</p>
@@ -224,12 +225,12 @@ async function sendCodeEmail(email, code) {
   if (mail) {
     const from = process.env.SMTP_FROM || process.env.SMTP_USER
     await mail.sendMail({
-      from: `"Tenshi.id" <${from}>`,
+      from: `"Tenshi.My.id" <${from}>`,
       to: email,
-      subject: `Kode verifikasi Tenshi.id: ${code}`,
-      text: `Halo!\n\nKode verifikasi Tenshi.id kamu: ${code}\nBerlaku 10 menit. Jangan bagikan ke siapa pun.\n\nKalau kamu tidak merasa mendaftar, abaikan email ini.`,
+      subject: `Kode verifikasi Tenshi.My.id: ${code}`,
+      text: `Halo!\n\nKode verifikasi Tenshi.My.id kamu: ${code}\nBerlaku 10 menit. Jangan bagikan ke siapa pun.\n\nKalau kamu tidak merasa mendaftar, abaikan email ini.`,
       html: `<div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px;border:1px solid #eee;border-radius:12px">
-        <h2 style="margin:0 0 8px">Tenshi<span style="color:#6f39ee">.id</span></h2>
+        <h2 style="margin:0 0 8px">Tenshi<span style="color:#6f39ee">.My.id</span></h2>
         <p>Kode verifikasi kamu:</p>
         <p style="font-size:32px;font-weight:800;letter-spacing:8px;margin:8px 0">${code}</p>
         <p style="color:#888;font-size:13px">Berlaku 10 menit. Jangan bagikan ke siapa pun.</p>
@@ -795,12 +796,9 @@ app.post('/api/admin/shinigami/import', importLimiter, requireAuth, requireAdmin
 // Pendaftaran khusus Gmail: buat akun (belum aktif) lalu kirim kode verifikasi.
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
-    const { email, username, password } = req.body || {}
-    if (!email || !username || !password) return res.status(400).json({ error: 'Semua field wajib diisi' })
-    const mail = String(email).toLowerCase().trim()
-    if (!isGmail(mail)) return res.status(400).json({ error: 'Pendaftaran hanya untuk email @gmail.com' })
-    if (String(password).length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
-    if (String(username).trim().length < 3) return res.status(400).json({ error: 'Username minimal 3 karakter' })
+    const parsed = registerSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data pendaftaran tidak valid' })
+    const { email: mail, username, password } = parsed.data
 
     const existing = (await query('select * from members where email = $1', [mail]))[0]
     if (existing && existing.email_verified) {
@@ -905,9 +903,10 @@ app.post('/api/auth/resend-code', codeLimiter, async (req, res) => {
 
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body || {}
-    if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' })
-    const rows = await query('select * from members where email = $1', [String(email).toLowerCase().trim()])
+    const parsed = loginSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data login tidak valid' })
+    const { email, password } = parsed.data
+    const rows = await query('select * from members where email = $1', [email])
     const row = rows[0]
     if (!row) return res.status(401).json({ error: 'Email atau password salah' })
     if (!row.password_hash) {
@@ -1296,8 +1295,9 @@ app.post('/api/manga/:id/view', async (req, res) => {
 // ---------------- MANGA (admin write) ----------------
 app.post('/api/manga', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const b = req.body || {}
-    if (!b.title) return res.status(400).json({ error: 'Judul wajib diisi' })
+    const parsed = mangaInputSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data buku tidak valid' })
+    const b = parsed.data
     const slug = slugify(b.slug || b.title)
     const rows = await query(
       `insert into manga (slug, title, original_name, type, status, description, cover_url, banner_url,
@@ -1323,7 +1323,9 @@ app.put('/api/manga/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params
     if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
-    const b = req.body || {}
+    const parsed = mangaInputSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data buku tidak valid' })
+    const b = parsed.data
     const slug = slugify(b.slug || b.title)
     await query(
       `update manga set slug=$1, title=$2, original_name=$3, type=$4, status=$5, description=$6,
@@ -1746,9 +1748,9 @@ app.get('/api/announcements', async (_req, res) => {
 
 app.post('/api/announcements', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const title = String((req.body || {}).title || '').trim()
-    const body = String((req.body || {}).body || '').trim()
-    if (!title) return res.status(400).json({ error: 'Judul wajib diisi' })
+    const parsed = announcementSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data pengumuman tidak valid' })
+    const { title, body } = parsed.data
     const rows = await query(
       'insert into announcements (title, body) values ($1, $2) returning id, title, body, created_at',
       [title, body],
@@ -1764,9 +1766,9 @@ app.put('/api/announcements/:id', requireAuth, requireAdmin, async (req, res) =>
   try {
     const { id } = req.params
     if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
-    const title = String((req.body || {}).title || '').trim()
-    const body = String((req.body || {}).body || '').trim()
-    if (!title) return res.status(400).json({ error: 'Judul wajib diisi' })
+    const parsed = announcementSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data pengumuman tidak valid' })
+    const { title, body } = parsed.data
     const rows = await query(
       'update announcements set title = $1, body = $2 where id = $3 returning id, title, body, created_at',
       [title, body, id],
@@ -1838,7 +1840,7 @@ ensureSchema()
       throw err
     })
     server.on('listening', () => {
-      console.log(`Tenshi.id server berjalan di http://localhost:${PORT}`)
+      console.log(`Tenshi.My.id server berjalan di http://localhost:${PORT}`)
       console.log('Database: OK (skema siap)')
     })
   })

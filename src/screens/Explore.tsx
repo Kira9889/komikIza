@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { fetchMangaList, listGenres } from '../api/library'
 import { genres as seedGenres } from '../data/seed'
 import type { Genre, Manga } from '../types'
+import { queryKeys } from '../lib/queryKeys'
 import MangaCard from '../components/manga/MangaCard'
 import MangaListCard from '../components/manga/MangaListCard'
 import FilterTabs from '../components/ui/FilterTabs'
@@ -12,28 +14,32 @@ const PER_PAGE = 18
 const VIEW_KEY = 'tenshi_explore_view'
 
 export default function Explore() {
-  const [all, setAll] = useState<Manga[]>([])
+  const mangaQuery = useQuery({ queryKey: queryKeys.mangaList, queryFn: () => fetchMangaList() })
+  const genreQuery = useQuery({ queryKey: queryKeys.genres, queryFn: listGenres })
+  const all: Manga[] = mangaQuery.data ?? []
   const [type, setType] = useState('semua')
   const [genre, setGenre] = useState('Semua')
   const [sort, setSort] = useState('views')
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
+  const loading = mangaQuery.isPending
   const [filterOpen, setFilterOpen] = useState(false)
-  const [view, setView] = useState<'grid' | 'list'>(() =>
-    localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid',
-  )
-  const [allGenres, setAllGenres] = useState<Genre[]>(seedGenres)
+  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const allGenres: Genre[] = genreQuery.data?.length ? genreQuery.data : seedGenres
 
   useEffect(() => {
-    listGenres()
-      .then(list => {
-        if (list.length) setAllGenres(list)
-      })
-      .catch(() => {})
+    try {
+      setView(localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid')
+    } catch {
+      setView('grid')
+    }
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(VIEW_KEY, view)
+    try {
+      localStorage.setItem(VIEW_KEY, view)
+    } catch {
+      // Preference is optional when storage is unavailable.
+    }
   }, [view])
 
   const activeFilters = (type !== 'semua' ? 1 : 0) + (genre !== 'Semua' ? 1 : 0)
@@ -68,18 +74,8 @@ export default function Explore() {
   )
 
   useEffect(() => {
-    document.title = 'Jelajahi Komik — Tenshi.id'
+    document.title = 'Jelajahi Komik — Tenshi.My.id'
   }, [])
-
-  useEffect(() => {
-    setLoading(true)
-    fetchMangaList({
-      type: type === 'semua' ? undefined : type,
-      genre: genre === 'Semua' ? undefined : genre,
-    })
-      .then(d => setAll(d))
-      .finally(() => setLoading(false))
-  }, [type, genre])
 
   const filtered = [...all].sort((a, b) => {
     if (sort === 'latest') return (b.latest_chapter?.release_timestamp ?? 0) - (a.latest_chapter?.release_timestamp ?? 0)

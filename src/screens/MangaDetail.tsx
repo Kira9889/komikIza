@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { fetchMangaBySlug, fetchChapters, fetchReadChapters } from '../api/library'
 import { displayFollows, displayRating, displayViews, isShinigamiRating } from '../lib/stats'
-import type { Manga, Chapter } from '../types'
 import { useLibrary } from '../context/LibraryContext'
 import { useAuth } from '../context/AuthContext'
+import { queryKeys } from '../lib/queryKeys'
 import Comments from '../components/manga/Comments'
 import {
   EyeIcon,
@@ -23,54 +24,49 @@ function formatNumber(n: number) {
 
 export default function MangaDetail() {
   const { slug } = useParams<{ slug: string }>()
-  const [manga, setManga] = useState<Manga | null>(null)
-  const [chapters, setChapters] = useState<Chapter[]>([])
-  const [loading, setLoading] = useState(true)
+  const mangaQuery = useQuery({
+    queryKey: queryKeys.manga(slug ?? ''),
+    queryFn: () => fetchMangaBySlug(slug ?? ''),
+    enabled: !!slug,
+  })
+  const manga = mangaQuery.data ?? null
+  const loading = mangaQuery.isPending
   const [newestFirst, setNewestFirst] = useState(true)
-  const [chaptersLoading, setChaptersLoading] = useState(true)
-  const [chaptersError, setChaptersError] = useState('')
+  const [chaptersRetryError, setChaptersRetryError] = useState('')
   const [slowServer, setSlowServer] = useState(false)
   const { isLiked, toggleLike, isChapterRead, mergeReadChapters } = useLibrary()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const chaptersQuery = useQuery({
+    queryKey: queryKeys.chapters(manga?.id ?? ''),
+    queryFn: () => fetchChapters(manga!.id, { slim: true }),
+    enabled: !!manga,
+  })
+  const chapters = chaptersQuery.data ?? []
+  const chaptersLoading = !!manga && chaptersQuery.isPending
+  const chaptersError = chaptersRetryError
+  const [now, setNow] = useState(0)
 
-  const loadChapters = async (mangaId: string) => {
-    setChaptersLoading(true)
-    setChaptersError('')
-    try {
-      // Slim: daftar tanpa blob pages (jauh lebih ringan).
-      const ch = await fetchChapters(mangaId, { slim: true })
-      setChapters(ch)
-    } catch {
-      setChaptersError('Gagal memuat daftar chapter. Server mungkin sedang aktif kembali dari mode tidur.')
-    } finally {
-      setChaptersLoading(false)
+  useEffect(() => {
+    setNow(Date.now())
+  }, [])
+
+  const loadChapters = async () => {
+    setChaptersRetryError('')
+    const result = await chaptersQuery.refetch()
+    if (result.isError) {
+      setChaptersRetryError('Gagal memuat daftar chapter. Server mungkin sedang aktif kembali dari mode tidur.')
     }
   }
 
   useEffect(() => {
-    document.title = manga ? `${manga.title} — Tenshi.id` : 'Tenshi.id — Digital Manga Library'
+    document.title = manga ? `${manga.title} — Tenshi.My.id` : 'Tenshi.My.id — Digital Manga Library'
   }, [manga?.title])
 
   useEffect(() => {
-    if (!slug) return
-    setLoading(true)
-    setChaptersLoading(true)
-    setChaptersError('')
-    fetchMangaBySlug(slug)
-      .then(m => {
-        setLoading(false)
-        if (!m) return
-        setManga(m)
-        void loadChapters(m.id)
-        // Ambil tanda baca dari backend (login saja; tamu pakai lokal).
-        if (user) {
-          fetchReadChapters(m.id).then(ids => mergeReadChapters(m.id, ids))
-        }
-      })
-      .catch(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, user?.id])
+    if (!manga || !user) return
+    fetchReadChapters(manga.id).then(ids => mergeReadChapters(manga.id, ids))
+  }, [manga?.id, user?.id])
 
   // Saat cold start (>15 detik) beri tahu user bahwa server sedang dibangunkan.
   useEffect(() => {
@@ -256,7 +252,7 @@ export default function MangaDetail() {
             <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-10 text-center">
               <p className="text-sm font-medium text-red-300">{chaptersError}</p>
               <button
-                onClick={() => void loadChapters(manga.id)}
+                onClick={() => void loadChapters()}
                 className="rounded-lg bg-primary-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
               >
                 Coba lagi
@@ -280,7 +276,7 @@ export default function MangaDetail() {
                       {ch.name}
                     </span>
                     <span className="text-xs text-general-400">
-                      {formatTimestamp(ch.release_timestamp)}
+                      {formatTimestamp(ch.release_timestamp, now)}
                     </span>
                   </Link>
                 )
@@ -317,8 +313,16 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function formatTimestamp(ts: number) {
-  const diff = Date.now() / 1000 - ts
+function formatTimestamp(ts: number, now: number) {
+  if (!now) {
+    return new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(ts * 1000))
+  }
+  const diff = now / 1000 - ts
   const days = Math.floor(diff / 86400)
   if (days <= 0) return 'Hari ini'
   if (days === 1) return 'Kemarin'

@@ -103,9 +103,10 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const historyKey = useMemo(() => `tenshi_history_${userId}`, [userId])
   const readKey = useMemo(() => `tenshi_read_${userId}`, [userId])
 
-  const [likedIds, setLikedIds] = useState<string[]>(() => loadLocal(storageKey))
-  const [history, setHistory] = useState<HistoryEntry[]>(() => loadLocalHistory(historyKey))
-  const [readMap, setReadMap] = useState<Record<string, string[]>>(() => loadLocalReadMap(readKey))
+  const [likedIds, setLikedIds] = useState<string[]>([])
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [readMap, setReadMap] = useState<Record<string, string[]>>({})
+  const [ready, setReady] = useState(false)
 
   // User yang datanya sedang dipegang state. Mencegah efek simpan di bawah
   // menulis data user lama (mis. guest) ke slot user baru sebelum
@@ -114,32 +115,34 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   // Simpan ke localStorage sebagai cache/mirror
   useEffect(() => {
-    if (loadedUserRef.current !== userId) return
+    if (!ready || loadedUserRef.current !== userId) return
     localStorage.setItem(storageKey, JSON.stringify(likedIds))
-  }, [likedIds, storageKey, userId])
+  }, [likedIds, ready, storageKey, userId])
 
   useEffect(() => {
-    if (loadedUserRef.current !== userId) return
+    if (!ready || loadedUserRef.current !== userId) return
     try {
       const entries = Object.entries(readMap).slice(-100)
       localStorage.setItem(readKey, JSON.stringify(Object.fromEntries(entries)))
     } catch {
       /* abaikan */
     }
-  }, [readMap, readKey, userId])
+  }, [readMap, readKey, ready, userId])
 
   useEffect(() => {
-    if (loadedUserRef.current !== userId) return
+    if (!ready || loadedUserRef.current !== userId) return
     localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 100)))
-  }, [history, historyKey, userId])
+  }, [history, historyKey, ready, userId])
 
   // Saat user berubah: tampilkan cache lokal user itu SEKEITKA (tanpa
   // menunggu network), lalu segarkan favorit + riwayat dari backend.
   useEffect(() => {
+    setReady(false)
     setLikedIds(loadLocal(storageKey))
     setHistory(loadLocalHistory(historyKey))
     setReadMap(loadLocalReadMap(readKey))
     loadedUserRef.current = userId
+    setReady(true)
     let cancelled = false
     ;(async () => {
       const online = await isBackendOnline()

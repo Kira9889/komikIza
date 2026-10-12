@@ -1,6 +1,6 @@
-# Tenshi.id — Prototype Digital Manga Library
+# Tenshi.My.id — Prototype Digital Manga Library
 
-Prototype website perpustakaan komik/manhwa/manhua (mirip Shinigami Scans) dibangun dengan **React + TypeScript + Vite + Tailwind CSS** (frontend) dan **Node/Express + Neon Postgres** (backend + auth).
+Website perpustakaan komik/manhwa/manhua dibangun dengan **Next.js App Router + React + TypeScript + Tailwind CSS**, **TanStack Query** untuk cache data, dan **Zod** untuk validasi. API dan autentikasi tetap memakai **Node/Express + PostgreSQL (Supabase/Neon)**.
 
 ## Fitur
 
@@ -43,21 +43,31 @@ copy .env.example .env   # Windows — isi DATABASE_URL
 npm run dev              # server di http://localhost:5001
 ```
 
-Lalu frontend:
+Lalu frontend Next.js:
 
 ```bash
 cd prototype
 npm install
-npm run dev              # Vite di http://localhost:5173 (proxy /api -> 5001)
+npm run dev              # Next.js di http://localhost:3000 (proxy /api -> 5001)
 ```
 
-Mode produksi frontend:
+Mode produksi lokal:
 
 ```bash
 cd prototype
 npm run build
-npm run preview
+npm run start
 ```
+
+## SSR, validasi, dan pengujian
+
+- Halaman Home, Explore, Search, dan detail komik mengambil data awal di server lalu menghidrasi cache TanStack Query.
+- Validasi input login, registrasi, buku, dan pengumuman memakai schema Zod bersama di frontend dan backend.
+- `npm test` menjalankan unit test Vitest; `npm run test:e2e` menjalankan alur browser Playwright (jalankan `npx playwright install chromium` sekali untuk mengunduh browser).
+
+## Deploy ke Cloudflare
+
+Frontend Next.js SSR memerlukan **Cloudflare Workers** dengan adapter OpenNext, bukan build statis Cloudflare Pages. Set `NEXT_PUBLIC_API_URL` dan `API_SERVER_URL` ke URL API publik, lalu jalankan `npm run preview` untuk preview lokal atau `npm run deploy` untuk deploy dari Wrangler. Sebelum deploy, buat/siapkan Worker `tenshi-my-id` dan arahkan custom domain ke Worker tersebut. Backend Express dan database tetap terpisah seperti sebelumnya.
 
 ## Neon (Data Base)
 
@@ -79,15 +89,17 @@ Data disimpan di **Neon** (Postgres serverless). Skema tabel otomatis dibuat saa
 
 ```
 prototype/
-├─ index.html
-├─ vite.config.ts           # proxy /api -> localhost:5001 (dev)
+├─ src/app/                 # Next.js SSR routes, metadata, dan provider
+├─ next.config.ts           # rewrite /api -> localhost:5001 (dev)
+├─ vitest.config.ts         # unit test
+├─ playwright.config.ts     # browser test
 ├─ .env.example
 ├─ server/                  # backend Node/Express
 │  ├─ index.js              # API: auth, manga, genre, author, chapter, likes
 │  ├─ schema.sql            # skema Postgres Neon (auto-run saat server start)
 │  └─ .env                  # DATABASE_URL (tidak di-commit)
 └─ src/
-   ├─ main.tsx / App.tsx    # routing
+   ├─ App.tsx               # aplikasi React Router di dalam shell Next.js
    ├─ index.css             # tema (dark ala Shinigami)
    ├─ lib/api.ts            # fetch wrapper + token JWT + deteksi backend
    ├─ api/library.ts        # data layer (REST backend + fallback mock)
@@ -101,7 +113,7 @@ prototype/
    │  ├─ ProtectedRoute.tsx # proteksi rute (user/admin)
    │  └─ manga/MangaCard.tsx
    ├─ icons/
-   └─ pages/                # Home, Explore, Library, Search, MangaDetail,
+   └─ screens/              # Home, Explore, Library, Search, MangaDetail,
                             # ReadChapter, Login, Register,
                             # admin/AdminManga, admin/AdminGenres,
                             # admin/AdminAuthors, admin/AdminChapters

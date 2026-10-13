@@ -280,13 +280,23 @@ async function main() {
     mangas = mangas.filter(m => m.id === args.manga || m.slug === args.manga)
     if (!mangas.length) throw new Error(`Judul ${args.manga} tidak ditemukan / tidak punya shinigami_id`)
   }
-  // --new: hanya judul yang BELUM punya chapter sama sekali (bookmark baru
-  // hasil impor). Dipakai malam hari tepat setelah --import agar judul baru
-  // langsung isi chapter tanpa nunggu giliran rotasi.
+  // --new: judul katalog baru yang belum punya chapter, serta judul lama
+  // yang chapter terbarunya (berdasar nomor katalog) belum tersimpan. Import
+  // katalog dijalankan lebih dulu agar latest_chapter_number selalu aktual.
   if (args.new) {
-    const ids = (await query('select distinct manga_id as id from chapters')).map(r => r.id)
-    const empty = new Set(mangas.map(m => m.id).filter(id => !ids.includes(id)))
-    mangas = mangas.filter(m => empty.has(m.id))
+    const pending = await query(
+      `select m.id
+       from manga m
+       left join chapters c on c.manga_id = m.id
+       where m.shinigami_id is not null and m.shinigami_id <> ''
+       group by m.id, m.latest_chapter_number
+       having count(c.id) = 0
+          or coalesce(max(
+               nullif((regexp_match(c.name, '(?i)chapter[[:space:]]+([0-9]+([.][0-9]+)?)'))[1], '')::numeric
+             ), 0) < coalesce(m.latest_chapter_number, 0)`,
+    )
+    const pendingIds = new Set(pending.map(row => row.id))
+    mangas = mangas.filter(m => pendingIds.has(m.id))
   }
   const offset = Number(args.offset || 0)
   const limit = args.limit ? Number(args.limit) : mangas.length

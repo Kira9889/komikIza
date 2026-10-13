@@ -8,7 +8,7 @@ export default function Footer() {
           <div className="flex items-center gap-2">
             <Logo size={48} />
             <span className="font-display text-xl font-extrabold">
-              Tenshi<span className="text-primary-500">.id</span>
+              Tenshi<span className="text-primary-500">.My.id</span>
             </span>
           </div>
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-general-300">
@@ -19,7 +19,7 @@ export default function Footer() {
             <a href="#" className="hover:text-primary-500">Donasi</a>
           </div>
           <p className="text-xs text-general-400">
-            © 2026 Tenshi.my.id
+            © 2026 Tenshi.My.id
           </p>
         </div>
       </div>

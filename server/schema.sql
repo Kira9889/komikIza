@@ -1,5 +1,5 @@
 -- ============================================================
--- Tenshi.id — Neon (Postgres) database schema — versi standalone
+-- Tenshi.My.id — Neon (Postgres) database schema — versi standalone
 -- Otomatis dijalankan saat server dinyalakan (lihat index.js),
 -- atau bisa juga dijalankan manual via Neon SQL Editor.
 -- ============================================================
@@ -162,7 +162,7 @@ create table if not exists public.read_chapters (
 create index if not exists idx_read_chapters_user_manga on public.read_chapters(user_id, manga_id);
 
 -- ------------------------------------------------------------
--- VERIFIKASI EMAIL + LOGIN GOOGLE (Tenshi.id)
+-- VERIFIKASI EMAIL + LOGIN GOOGLE (Tenshi.My.id)
 -- Ditambah belakangan; ALTER ... IF NOT EXISTS aman dijalankan
 -- ulang saat server start (ensureSchema).
 -- ------------------------------------------------------------

@@ -288,6 +288,7 @@ export async function deleteComment(id: string): Promise<void> {
 // PENGUMUMAN (baca publik, tulis admin)
 // ---------------------------------------------------------------
 export async function fetchAnnouncements(): Promise<Announcement[] | null> {
+  if (!(await isBackendOnline())) return null
   try {
     return await apiFetch<Announcement[]>('/announcements')
   } catch (e) {

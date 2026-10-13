@@ -2,25 +2,25 @@ import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
-import Home from './pages/Home'
-import Explore from './pages/Explore'
-import Library from './pages/Library'
-import Search from './pages/Search'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import VerifyEmail from './pages/VerifyEmail'
-import GoogleCallback from './pages/GoogleCallback'
-import AdminLayout from './pages/admin/AdminLayout'
+import Home from './screens/Home'
+import Explore from './screens/Explore'
+import Library from './screens/Library'
+import Search from './screens/Search'
+import Login from './screens/Login'
+import Register from './screens/Register'
+import VerifyEmail from './screens/VerifyEmail'
+import GoogleCallback from './screens/GoogleCallback'
+import AdminLayout from './screens/admin/AdminLayout'
 
 // Rute berat di-split agar bundle awal ringan: diunduh saat dibuka saja.
-const MangaDetail = lazy(() => import('./pages/MangaDetail'))
-const ReadChapter = lazy(() => import('./pages/ReadChapter'))
-const AdminManga = lazy(() => import('./pages/admin/AdminManga'))
-const AdminGenres = lazy(() => import('./pages/admin/AdminGenres'))
-const AdminAuthors = lazy(() => import('./pages/admin/AdminAuthors'))
-const AdminChapters = lazy(() => import('./pages/admin/AdminChapters'))
-const AdminComments = lazy(() => import('./pages/admin/AdminComments'))
-const AdminAnnouncements = lazy(() => import('./pages/admin/AdminAnnouncements'))
+const MangaDetail = lazy(() => import('./screens/MangaDetail'))
+const ReadChapter = lazy(() => import('./screens/ReadChapter'))
+const AdminManga = lazy(() => import('./screens/admin/AdminManga'))
+const AdminGenres = lazy(() => import('./screens/admin/AdminGenres'))
+const AdminAuthors = lazy(() => import('./screens/admin/AdminAuthors'))
+const AdminChapters = lazy(() => import('./screens/admin/AdminChapters'))
+const AdminComments = lazy(() => import('./screens/admin/AdminComments'))
+const AdminAnnouncements = lazy(() => import('./screens/admin/AdminAnnouncements'))
 
 function RouteFallback() {
   return (

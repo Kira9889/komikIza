@@ -57,7 +57,7 @@ export default function ReadChapter() {
 
   useEffect(() => {
     document.title =
-      manga && current ? `${manga.title} ${current.name} — Tenshi.id` : 'Baca Chapter — Tenshi.id'
+      manga && current ? `${manga.title} ${current.name} — Tenshi.My.id` : 'Baca Chapter — Tenshi.My.id'
   }, [manga?.title, current?.name])
 
   // Header overlay makin solid saat halaman digulir
@@ -301,7 +301,7 @@ function ChapterImage({
 // Ambil URL CDN asli dari balik proxy /api/shinigami/image?url=...
 function directImageUrl(src: string): string {
   try {
-    const u = new URL(src, window.location.origin)
+    const u = new URL(src, 'https://tenshi.my.id')
     if (u.pathname === '/api/shinigami/image') {
       const direct = u.searchParams.get('url')
       if (direct) return direct

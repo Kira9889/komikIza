@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../context/AuthContext'
+import { fetchMangaList, listGenres } from '../../api/library'
+import { queryKeys } from '../../lib/queryKeys'
 import Logo from '../Logo'
 import ProfilePopup from '../auth/ProfilePopup'
 import NavbarSearch from './NavbarSearch'
@@ -60,10 +63,22 @@ export default function Navbar() {
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const [dark, setDark] = useState(true)
+
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains('dark'))
+  }, [])
   const [showProfile, setShowProfile] = useState(false)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const prefetchBrowseData = () => {
+    void Promise.all([
+      queryClient.prefetchQuery({ queryKey: queryKeys.mangaList, queryFn: () => fetchMangaList() }),
+      queryClient.prefetchQuery({ queryKey: queryKeys.genres, queryFn: listGenres }),
+    ])
+  }
 
   const toggleTheme = () => {
     document.documentElement.classList.toggle('dark')
@@ -84,13 +99,20 @@ export default function Navbar() {
         <NavLink to="/" className="flex items-center gap-2" onClick={closeMenu}>
           <Logo size={48} />
           <span className="font-display text-xl font-extrabold tracking-tight">
-            Tenshi<span className="text-primary-500">.id</span>
+            Tenshi<span className="text-primary-500">.My.id</span>
           </span>
         </NavLink>
 
         <nav className="hidden md:flex items-center gap-1">
           {navLinks.map(l => (
-            <NavLink key={l.to} to={l.to} className={navClass} end={l.to === '/'}>
+            <NavLink
+              key={l.to}
+              to={l.to}
+              className={navClass}
+              end={l.to === '/'}
+              onPointerEnter={l.to === '/explore' ? prefetchBrowseData : undefined}
+              onFocus={l.to === '/explore' ? prefetchBrowseData : undefined}
+            >
               {l.label}
             </NavLink>
           ))}
@@ -169,6 +191,8 @@ export default function Navbar() {
                 to={l.to}
                 end={l.to === '/'}
                 onClick={closeMenu}
+                onPointerDown={l.to === '/explore' ? prefetchBrowseData : undefined}
+                onFocus={l.to === '/explore' ? prefetchBrowseData : undefined}
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                     isActive ? 'bg-primary-500/10 text-primary-500' : 'text-general-300 hover:bg-white/5'

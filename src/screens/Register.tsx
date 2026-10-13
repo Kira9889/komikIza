@@ -54,7 +54,7 @@ export default function Register() {
       <div className="mb-6 flex items-center gap-2">
         <Logo size={56} />
         <span className="font-display text-xl font-extrabold">
-          Tenshi<span className="text-primary-500">.id</span>
+          Tenshi<span className="text-primary-500">.My.id</span>
         </span>
       </div>
 

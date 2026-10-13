@@ -11,9 +11,14 @@ function formatCompact(n: number) {
 }
 
 // Kartu horizontal ala daftar update: cover + badge rating + judul +
-// chapter terbaru + waktu. Dipakai saat mode tampilan "list".
+// tiga chapter terbaru beserta waktunya. Dipakai saat mode tampilan "list".
 export default function MangaListCard({ manga }: { manga: Manga }) {
-  const ch = manga.latest_chapter
+  const chapters = (manga.latest_chapters?.length
+    ? manga.latest_chapters
+    : manga.latest_chapter
+      ? [manga.latest_chapter]
+      : []
+  ).slice(0, 3)
   return (
     <div className="group flex gap-3.5 overflow-hidden rounded-xl border border-(--line) bg-(--card) p-3 shadow-md transition-all duration-300 hover:shadow-xl">
       <Link
@@ -39,8 +44,9 @@ export default function MangaListCard({ manga }: { manga: Manga }) {
           </Link>
         </div>
         <div className="mt-2 space-y-1.5">
-          {ch ? (
+          {chapters.length ? chapters.map(ch => (
             <Link
+              key={ch.id}
               to={`/manga/${manga.slug}/chapter/${ch.id}`}
               className="flex w-full items-center justify-between rounded-lg bg-[#0f0f14] px-2.5 py-2 text-left text-xs transition-all hover:bg-black sm:px-3"
             >
@@ -52,7 +58,7 @@ export default function MangaListCard({ manga }: { manga: Manga }) {
                 {ch.release_timestamp ? timeAgo(ch.release_timestamp) : ''}
               </span>
             </Link>
-          ) : (
+          )) : (
             <span className="block rounded-lg bg-[#0f0f14] px-2.5 py-2 text-xs text-general-400">
               Sedang tayang
             </span>

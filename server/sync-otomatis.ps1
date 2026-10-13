@@ -1,4 +1,4 @@
-# Tenshi.id — sync otomatis Shinigami -> Supabase (WAJIB jalan dari IP rumah,
+# Tenshi.My.id — sync otomatis Shinigami -> Supabase (WAJIB jalan dari IP rumah,
 # karena IP datacenter seperti Render diblokir api.shngm.io).
 #
 # Cara pakai manual: klik kanan file ini > Run with PowerShell.
@@ -40,6 +40,13 @@ $wantFull = $args -contains '-Full'
   node sync-shinigami.mjs --import
   if ($LASTEXITCODE -ne 0) {
     Write-Output (& $stamp "Impor katalog exit=$LASTEXITCODE (lanjut chapter)")
+  }
+  # Judul baru hasil impor langsung diisi chapter malam itu juga
+  # (tidak nunggu giliran rotasi 5 harian).
+  Write-Output (& $stamp 'Chapter judul baru (--new)')
+  node sync-shinigami.mjs --new --workers=3 --jobs=1
+  if ($LASTEXITCODE -ne 0) {
+    Write-Output (& $stamp "Chapter baru exit=$LASTEXITCODE (lanjut rotasi)")
   }
   # Bagi beban: tiap malam cuma 200 judul, rotasi per tanggal (full 1000
   # kelar dalam 5 malam). Parameter -Full untuk sapu semua sekaligus.

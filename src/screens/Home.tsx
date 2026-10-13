@@ -1,37 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { fetchAnnouncements, fetchHomeCollections } from '../api/library'
 import type { Announcement, HomeCollections, Manga } from '../types'
+import { queryKeys } from '../lib/queryKeys'
 import MangaCard from '../components/manga/MangaCard'
 import SectionTitle from '../components/ui/SectionTitle'
 import FilterTabs from '../components/ui/FilterTabs'
 
 export default function Home() {
-  const [data, setData] = useState<HomeCollections | null>(null)
+  const { data } = useQuery({ queryKey: queryKeys.home, queryFn: fetchHomeCollections })
   const [recoTab, setRecoTab] = useState('manhwa')
   const [popTab, setPopTab] = useState('daily')
   const [updTab, setUpdTab] = useState('project')
   // Jam berjalan agar label waktu pengumuman selalu real-time.
-  const [now, setNow] = useState(() => Date.now())
+  const [now, setNow] = useState(0)
   // Pengumuman hanya berasal dari backend agar yang sudah dihapus admin tidak muncul lagi.
-  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const { data: announcements = [] } = useQuery<Announcement[]>({
+    queryKey: queryKeys.announcements,
+    queryFn: async () => (await fetchAnnouncements()) ?? [],
+  })
 
   useEffect(() => {
-    // Backend gagal atau daftar kosong: jangan munculkan ulang pengumuman bawaan.
-    fetchAnnouncements().then(list => {
-      setAnnouncements(list ?? [])
-    }).catch(() => {})
+    document.title = 'Tenshi.My.id — Digital Manga Library'
   }, [])
 
   useEffect(() => {
-    document.title = 'Tenshi.id — Digital Manga Library'
-  }, [])
-
-  useEffect(() => {
-    fetchHomeCollections().then(setData).catch(console.error)
-  }, [])
-
-  useEffect(() => {
+    setNow(Date.now())
     const t = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(t)
   }, [])

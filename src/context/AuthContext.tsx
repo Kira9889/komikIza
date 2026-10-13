@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { apiFetch, setToken, isBackendOnline, isServerDownError } from '../lib/api'
 import type { User } from '../types'
+import { loginSchema, registerSchema } from '../../server/validation.js'
 
 export interface AuthResult {
   error?: string
@@ -45,22 +46,7 @@ interface AuthResponse {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const current = localStorage.getItem(STORAGE_KEY)
-      if (current) return JSON.parse(current) as User | null
-      // Migrasi sekali dari key lama IzaLib
-      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
-      if (legacy) {
-        localStorage.setItem(STORAGE_KEY, legacy)
-        localStorage.removeItem(LEGACY_STORAGE_KEY)
-        return JSON.parse(legacy) as User | null
-      }
-      return null
-    } catch {
-      return null
-    }
-  })
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   const persist = (u: User | null) => {
@@ -73,6 +59,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      try {
+        const current = localStorage.getItem(STORAGE_KEY)
+        const legacy = current ? null : localStorage.getItem(LEGACY_STORAGE_KEY)
+        const stored = current || legacy
+        if (legacy) {
+          localStorage.setItem(STORAGE_KEY, legacy)
+          localStorage.removeItem(LEGACY_STORAGE_KEY)
+        }
+        if (!cancelled && stored) setUser(JSON.parse(stored) as User | null)
+      } catch {
+        if (!cancelled) setUser(null)
+      }
       const online = await isBackendOnline()
       if (!online) {
         setLoading(false)
@@ -105,9 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string
     password: string
   }): Promise<AuthResult> => {
-    if (!email || !password || !username) return { error: 'Semua field wajib diisi' }
-    if (!isGmailAddress(email)) return { error: 'Pendaftaran hanya untuk email @gmail.com' }
-    if (password.length < 6) return { error: 'Password minimal 6 karakter' }
+    const parsed = registerSchema.safeParse({ username, email, password })
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message || 'Data pendaftaran tidak valid' }
+    ;({ username, email, password } = parsed.data)
 
     let online = await isBackendOnline()
     if (online) {
@@ -143,7 +141,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string
     password: string
   }): Promise<AuthResult> => {
-    if (!email || !password) return { error: 'Email dan password wajib diisi' }
+    const parsed = loginSchema.safeParse({ email, password })
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message || 'Data login tidak valid' }
+    ;({ email, password } = parsed.data)
 
     let online = await isBackendOnline()
     if (online) {
@@ -168,10 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!online) {
     // Mock auth (hanya saat backend offline) — termasuk akun admin demo.
-    // DEV-only: Vite membuang blok ini dari production build,
+    // DEV-only: Next.js removes this branch from production builds,
     // jadi kredensial demo tidak masuk bundle publik. Di dev tetap bisa dipakai.
     if (
-      import.meta.env.DEV &&
+      process.env.NODE_ENV !== 'production' &&
       (email === 'admin@tenshi.id' || email === 'admin@izalib.test') &&
       password === 'admin123'
     ) {

@@ -98,8 +98,8 @@ export default function Explore() {
         <span className="text-sm text-general-400">{all.length} judul</span>
       </div>
 
-      <div className="flex-col gap-5 hidden md:flex">
-        <div>
+      <div className="flex flex-col gap-5">
+        <div className="hidden md:block">
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-general-400">
             Tipe
           </label>
@@ -122,12 +122,12 @@ export default function Explore() {
           <div className="flex flex-wrap gap-2">{genreChips}</div>
         </div>
 
-        <div className="flex items-center justify-between border-y border-(--line) py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-y border-(--line) py-3">
           <span className="text-sm text-general-400">
             Menampilkan {filtered.length > 0 ? (page - 1) * PER_PAGE + 1 : 0}–
             {Math.min(page * PER_PAGE, filtered.length)} dari {filtered.length} judul
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             <button
               onClick={() => setFilterOpen(true)}
               className="relative flex items-center gap-1.5 rounded-lg border border-(--line) bg-(--card) px-3 py-2 text-sm font-semibold text-general-200 transition hover:border-primary-500/50"

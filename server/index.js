@@ -74,18 +74,19 @@ async function ensureSchema() {
   const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD
   if (bootstrapPassword) {
     if (bootstrapPassword.length < 16) {
-      throw new Error('ADMIN_BOOTSTRAP_PASSWORD harus minimal 16 karakter.')
-    }
-    const bootstrapEmail = (process.env.ADMIN_BOOTSTRAP_EMAIL || 'admin@tenshi.id').trim().toLowerCase()
-    const existingAdmin = await query('select 1 from members where email = $1', [bootstrapEmail])
-    if (!existingAdmin[0]) {
-      const hash = await bcrypt.hash(bootstrapPassword, 12)
-      await query(
-        `insert into members (email, username, password_hash, role, email_verified)
-         values ($1, 'admin', $2, 'admin', true)
-         on conflict (email) do nothing`,
-        [bootstrapEmail, hash],
-      )
+      console.error('[security] ADMIN_BOOTSTRAP_PASSWORD harus minimal 16 karakter; akun admin baru tidak dibuat.')
+    } else {
+      const bootstrapEmail = (process.env.ADMIN_BOOTSTRAP_EMAIL || 'admin@tenshi.id').trim().toLowerCase()
+      const existingAdmin = await query('select 1 from members where email = $1', [bootstrapEmail])
+      if (!existingAdmin[0]) {
+        const hash = await bcrypt.hash(bootstrapPassword, 12)
+        await query(
+          `insert into members (email, username, password_hash, role, email_verified)
+           values ($1, 'admin', $2, 'admin', true)
+           on conflict (email) do nothing`,
+          [bootstrapEmail, hash],
+        )
+      }
     }
   } else {
     console.warn('[security] ADMIN_BOOTSTRAP_PASSWORD tidak diatur; akun admin baru tidak dibuat otomatis.')

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Link, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../context/AuthContext'
+import { fetchMangaList, listGenres } from '../../api/library'
+import { queryKeys } from '../../lib/queryKeys'
 import Logo from '../Logo'
 import ProfilePopup from '../auth/ProfilePopup'
 import NavbarSearch from './NavbarSearch'
@@ -68,6 +71,14 @@ export default function Navbar() {
   const [showProfile, setShowProfile] = useState(false)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const prefetchBrowseData = () => {
+    void Promise.all([
+      queryClient.prefetchQuery({ queryKey: queryKeys.mangaList, queryFn: () => fetchMangaList() }),
+      queryClient.prefetchQuery({ queryKey: queryKeys.genres, queryFn: listGenres }),
+    ])
+  }
 
   const toggleTheme = () => {
     document.documentElement.classList.toggle('dark')
@@ -94,7 +105,14 @@ export default function Navbar() {
 
         <nav className="hidden md:flex items-center gap-1">
           {navLinks.map(l => (
-            <NavLink key={l.to} to={l.to} className={navClass} end={l.to === '/'}>
+            <NavLink
+              key={l.to}
+              to={l.to}
+              className={navClass}
+              end={l.to === '/'}
+              onPointerEnter={l.to === '/explore' ? prefetchBrowseData : undefined}
+              onFocus={l.to === '/explore' ? prefetchBrowseData : undefined}
+            >
               {l.label}
             </NavLink>
           ))}
@@ -173,6 +191,8 @@ export default function Navbar() {
                 to={l.to}
                 end={l.to === '/'}
                 onClick={closeMenu}
+                onPointerDown={l.to === '/explore' ? prefetchBrowseData : undefined}
+                onFocus={l.to === '/explore' ? prefetchBrowseData : undefined}
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                     isActive ? 'bg-primary-500/10 text-primary-500' : 'text-general-300 hover:bg-white/5'

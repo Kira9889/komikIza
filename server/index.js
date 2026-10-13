@@ -66,21 +66,30 @@ const query = async (text, params) => {
 }
 
 // ---------------------------------------------------------------
-// Bootstrap: buat skema (jika belum ada) + seed akun admin demo
+// Bootstrap: buat skema dan admin pertama hanya dengan password rahasia.
 // ---------------------------------------------------------------
 async function ensureSchema() {
   const sql = readFileSync(join(__dirname, 'schema.sql'), 'utf8')
   await pool.query(sql)
-  const hash = await bcrypt.hash('admin123', 10)
-  await query(
-    `insert into members (email, username, password_hash, role, email_verified)
-     values ('admin@tenshi.id', 'admin', $1, 'admin', true)
-     on conflict (email) do nothing`,
-    [hash],
-  )
-  // Akun lama yang sudah ada sebelum era verifikasi dianggap terverifikasi.
-  await query(`update members set email_verified = true where email = 'admin@tenshi.id'`)
-  await query(`update members set email_verified = true where email = 'admin@izalib.test'`)
+  const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD
+  if (bootstrapPassword) {
+    if (bootstrapPassword.length < 16) {
+      throw new Error('ADMIN_BOOTSTRAP_PASSWORD harus minimal 16 karakter.')
+    }
+    const bootstrapEmail = (process.env.ADMIN_BOOTSTRAP_EMAIL || 'admin@tenshi.id').trim().toLowerCase()
+    const existingAdmin = await query('select 1 from members where email = $1', [bootstrapEmail])
+    if (!existingAdmin[0]) {
+      const hash = await bcrypt.hash(bootstrapPassword, 12)
+      await query(
+        `insert into members (email, username, password_hash, role, email_verified)
+         values ($1, 'admin', $2, 'admin', true)
+         on conflict (email) do nothing`,
+        [bootstrapEmail, hash],
+      )
+    }
+  } else {
+    console.warn('[security] ADMIN_BOOTSTRAP_PASSWORD tidak diatur; akun admin baru tidak dibuat otomatis.')
+  }
   // Seed pengumuman awal SEKALI seumur hidup (penanda di schema_seeds).
   // Syarat "tabel kosong" saja tidak cukup: admin yang menghapus semua
   // pengumuman akan terus diisi ulang tiap restart kalau pakai itu.

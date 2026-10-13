@@ -15,7 +15,7 @@ describe('request validation schemas', () => {
   })
 
   it('accepts an existing admin email for login', () => {
-    expect(loginSchema.parse({ email: 'admin@tenshi.id', password: 'admin123' }).email).toBe('admin@tenshi.id')
+    expect(loginSchema.parse({ email: 'admin@tenshi.id', password: 'a-strong-test-password' }).email).toBe('admin@tenshi.id')
   })
 
   it('trims announcement content and rejects an empty title', () => {

@@ -34,12 +34,12 @@ Setiap user yang mendaftar otomatis ber-role `user` (hanya bisa baca, register, 
 
 ## Menjalankan (2 terminal)
 
-Backend dulu (otomatis membuat tabel di Neon + seed akun admin):
+Backend dulu (otomatis membuat tabel; admin awal perlu password rahasia):
 
 ```bash
 cd prototype/server
 npm install
-copy .env.example .env   # Windows — isi DATABASE_URL
+copy .env.example .env   # Windows — isi DATABASE_URL, JWT_SECRET, dan password admin
 npm run dev              # server di http://localhost:5001
 ```
 
@@ -81,7 +81,7 @@ Data disimpan di **Neon** (Postgres serverless). Skema tabel otomatis dibuat saa
    JWT_SECRET="ganti-dengan-string-acak-panjang"
    PORT=5001
    ```
-4. Nyalakan server — tabel langsung dibuat, akun admin `admin@tenshi.id / admin123` otomatis di-seed.
+4. Atur `ADMIN_BOOTSTRAP_EMAIL` dan `ADMIN_BOOTSTRAP_PASSWORD` (minimal 16 karakter) di environment backend sebelum dinyalakan. Akun admin hanya dibuat jika email itu belum terdaftar; password yang sudah ada tidak diubah saat restart.
 
 > URL backend hanya dipakai di sisi **server** (`server/.env`) — kredensial database tidak pernah masuk ke browser.
 

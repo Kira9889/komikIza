@@ -167,16 +167,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!online) {
-    // Mock auth (hanya saat backend offline) — termasuk akun admin demo.
-    // DEV-only: Next.js removes this branch from production builds,
-    // jadi kredensial demo tidak masuk bundle publik. Di dev tetap bisa dipakai.
-    if (
-      process.env.NODE_ENV !== 'production' &&
-      (email === 'admin@tenshi.id' || email === 'admin@izalib.test') &&
-      password === 'admin123'
-    ) {
-      persist({ id: 'admin', username: 'admin', email, role: 'admin' })
-      return {}
+    // Sesi offline hanya untuk development. Produksi tidak boleh menganggap
+    // user/role dari localStorage sebagai login bila API sedang tidak ada.
+    if (process.env.NODE_ENV === 'production') {
+      return { error: 'Server tidak merespons. Coba lagi sebentar lagi.' }
     }
     const users = getRegistered()
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase())

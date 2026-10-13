@@ -8,7 +8,7 @@ describe('Express request schemas', () => {
   })
 
   it('accepts the existing admin email for login', () => {
-    expect(loginSchema.parse({ email: 'admin@tenshi.id', password: 'admin123' }).email).toBe('admin@tenshi.id')
+    expect(loginSchema.parse({ email: 'admin@tenshi.id', password: 'a-strong-test-password' }).email).toBe('admin@tenshi.id')
   })
 
   it('rejects invalid manga status and blank announcements', () => {

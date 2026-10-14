@@ -39,7 +39,7 @@ export async function generateMetadata({ params, searchParams }: RouteProps): Pr
   }
   if (route === '/login') return { title: 'Masuk' }
   if (route === '/register') return { title: 'Daftar' }
-  if (route === '/maintenance' || (process.env.NEXT_PUBLIC_MAINTENANCE === 'true' && !route.startsWith('/admin'))) {
+  if (route === '/maintenance' || process.env.NEXT_PUBLIC_MAINTENANCE === 'true') {
     return { title: 'Pemeliharaan Sistem — Tenshi' }
   }
   return { title: 'Digital Manga Library' }
@@ -51,10 +51,7 @@ export default async function AppRoute({ params, searchParams }: RouteProps) {
   const location = `${route === '/' ? '' : route}${toSearchString(query)}` || '/'
 
   const isMaintenanceMode =
-    route === '/maintenance' ||
-    (process.env.NEXT_PUBLIC_MAINTENANCE === 'true' &&
-      !route.startsWith('/admin') &&
-      query.bypass !== '1')
+    route === '/maintenance' || process.env.NEXT_PUBLIC_MAINTENANCE === 'true'
 
   if (isMaintenanceMode) {
     return <MaintenanceScreen />

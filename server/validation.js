@@ -19,6 +19,15 @@ export const announcementSchema = z.object({
   body: z.string().trim().max(5000, 'Isi pengumuman maksimal 5000 karakter').default(''),
 })
 
+export const bannerSchema = z.object({
+  title: z.string().trim().max(200, 'Judul maksimal 200 karakter').default(''),
+  image_url: z.string().trim().min(1, 'Gambar/video wajib diisi').max(2048, 'URL terlalu panjang'),
+  media_type: z.enum(['image', 'video']).default('image'),
+  // Kosong = banner tidak menautkan ke judul mana pun (tombol baca disembunyikan).
+  manga_id: z.union([z.uuid('ID manga tidak valid'), z.literal('')]).optional().default(''),
+  sort_order: z.coerce.number().int().min(0).max(9999).default(0),
+})
+
 export const mangaInputSchema = z.object({
   title: z.string().trim().min(1, 'Judul wajib diisi').max(200, 'Judul maksimal 200 karakter'),
   slug: z.string().trim().max(240, 'Slug maksimal 240 karakter').optional().default(''),

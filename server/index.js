@@ -10,7 +10,7 @@ import nodemailer from 'nodemailer'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
-import { announcementSchema, loginSchema, mangaInputSchema, registerSchema } from './validation.js'
+import { announcementSchema, bannerSchema, loginSchema, mangaInputSchema, registerSchema } from './validation.js'
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { randomInt, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -1809,6 +1809,78 @@ app.delete('/api/announcements/:id', requireAuth, requireAdmin, async (req, res)
   }
 })
 
+// ---------------- BANNER HOME (baca publik, tulis admin) ----------------
+// Banner membawa slug manga (bila tertaut) supaya tombol baca di frontend
+// bisa langsung mengarah ke detail tanpa permintaan tambahan.
+const BANNER_SELECT = `
+  select b.id, b.title, b.image_url, b.media_type, b.manga_id, b.sort_order, b.created_at,
+         m.slug as manga_slug, m.title as manga_title, m.type as manga_type,
+         m.rating as manga_rating, m.shinigami_rating as manga_shinigami_rating
+  from banners b
+  left join manga m on m.id = b.manga_id
+`
+
+app.get('/api/banners', async (_req, res) => {
+  try {
+    const rows = await query(`${BANNER_SELECT} order by b.sort_order asc, b.created_at desc`)
+    res.json(rows)
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil banner' })
+  }
+})
+
+app.post('/api/banners', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const parsed = bannerSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data banner tidak valid' })
+    const { title, image_url, media_type, manga_id, sort_order } = parsed.data
+    const rows = await query(
+      `insert into banners (title, image_url, media_type, manga_id, sort_order)
+       values ($1, $2, $3, $4, $5) returning id`,
+      [title, image_url, media_type, manga_id || null, sort_order],
+    )
+    const created = await query(`${BANNER_SELECT} where b.id = $1`, [rows[0].id])
+    res.json(created[0])
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menambah banner' })
+  }
+})
+
+app.put('/api/banners/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
+    const parsed = bannerSchema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data banner tidak valid' })
+    const { title, image_url, media_type, manga_id, sort_order } = parsed.data
+    const rows = await query(
+      `update banners set title = $1, image_url = $2, media_type = $3, manga_id = $4, sort_order = $5
+       where id = $6 returning id`,
+      [title, image_url, media_type, manga_id || null, sort_order, id],
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Banner tidak ditemukan' })
+    const updated = await query(`${BANNER_SELECT} where b.id = $1`, [id])
+    res.json(updated[0])
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal memperbarui banner' })
+  }
+})
+
+app.delete('/api/banners/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
+    await query('delete from banners where id = $1', [id])
+    res.status(204).end()
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal menghapus banner' })
+  }
+})
+
 // ---------------- MODERASI KOMENTAR (admin) ----------------
 // Semua komentar user: dari buku + chapter apa. Hapus pakai
 // DELETE /api/comments/:id yang sudah ada (admin boleh hapus milik siapa saja).
@@ -1845,22 +1917,33 @@ app.use((err, _req, res, _next) => {
 // ---------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------
-ensureSchema()
-  .then(() => {
-    const server = app.listen(PORT)
-    server.on('error', err => {
-      if (err.code === 'EADDRINUSE') {
-        console.error(`Port ${PORT} sudah digunakan. Hentikan server lama (atau ubah PORT di server/.env), lalu jalankan ulang.`)
-        process.exit(1)
-      }
-      throw err
-    })
-    server.on('listening', () => {
-      console.log(`Tenshi.My.id server berjalan di http://localhost:${PORT}`)
-      console.log('Database: OK (skema siap)')
-    })
+// Koneksi DB saat boot bisa gagal sementara (mis. DNS pooler Supabase timeout).
+// Coba lagi dengan backoff agar server tidak mati hanya karena gangguan sesaat.
+const DB_RETRY_MS = [2000, 5000, 10000, 20000, 30000]
+
+async function startWithRetry() {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await ensureSchema()
+      break
+    } catch (err) {
+      const wait = DB_RETRY_MS[Math.min(attempt, DB_RETRY_MS.length - 1)]
+      console.error(`Gagal menyiapkan database (${err.message}). Coba lagi dalam ${wait / 1000}s…`)
+      await new Promise(r => setTimeout(r, wait))
+    }
+  }
+  const server = app.listen(PORT)
+  server.on('error', err => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} sudah digunakan. Hentikan server lama (atau ubah PORT di server/.env), lalu jalankan ulang.`)
+      process.exit(1)
+    }
+    throw err
   })
-  .catch(err => {
-    console.error('Gagal menyiapkan database:', err.message)
-    process.exit(1)
+  server.on('listening', () => {
+    console.log(`Tenshi.My.id server berjalan di http://localhost:${PORT}`)
+    console.log('Database: OK (skema siap)')
   })
+}
+
+startWithRetry()

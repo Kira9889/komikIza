@@ -10,7 +10,7 @@ import {
   ensureAuthors as mockEnsureAuthors,
   getChaptersCached,
 } from '../data/store'
-import type { Manga, Genre, Author, Chapter, Comment, AdminComment, Announcement, GifItem, HomeCollections, MangaInput } from '../types'
+import type { Manga, Genre, Author, Chapter, Comment, AdminComment, Announcement, Banner, BannerInput, GifItem, HomeCollections, MangaInput } from '../types'
 
 // ---------------------------------------------------------------
 // PUBLIC READ API
@@ -313,6 +313,32 @@ export async function saveAnnouncement(input: { id?: string; title: string; body
 
 export async function deleteAnnouncement(id: string): Promise<void> {
   await apiFetch(`/announcements/${id}`, { method: 'DELETE' })
+}
+
+// ---------------------------------------------------------------
+// BANNER HOME (baca publik, tulis admin)
+// ---------------------------------------------------------------
+export async function fetchBanners(): Promise<Banner[] | null> {
+  if (!(await isBackendOnline())) return null
+  try {
+    return await apiFetch<Banner[]>('/banners')
+  } catch (e) {
+    console.error(e)
+    return null
+  }
+}
+
+export async function saveBanner(input: BannerInput & { id?: string }): Promise<void> {
+  const body = JSON.stringify(input)
+  if (input.id) {
+    await apiFetch(`/banners/${input.id}`, { method: 'PUT', body })
+  } else {
+    await apiFetch('/banners', { method: 'POST', body })
+  }
+}
+
+export async function deleteBanner(id: string): Promise<void> {
+  await apiFetch(`/banners/${id}`, { method: 'DELETE' })
 }
 
 // ---------------------------------------------------------------

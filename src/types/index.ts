@@ -91,6 +91,31 @@ export interface Announcement {
   created_at: string
 }
 
+export interface Banner {
+  id: string
+  title: string
+  image_url: string
+  /** 'video' untuk animasi/video pendek; selain itu gambar biasa (termasuk GIF/WebP). */
+  media_type: 'image' | 'video'
+  /** Judul yang ditautkan; null = banner tanpa tombol baca. */
+  manga_id: string | null
+  manga_slug?: string | null
+  manga_title?: string | null
+  manga_type?: MangaType | null
+  manga_rating?: number | null
+  manga_shinigami_rating?: number | null
+  sort_order: number
+  created_at: string
+}
+
+export interface BannerInput {
+  title: string
+  image_url: string
+  media_type: 'image' | 'video'
+  manga_id: string
+  sort_order: number
+}
+
 export interface GifItem {
   id: string
   title: string

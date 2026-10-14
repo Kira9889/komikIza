@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { dehydrate, QueryClient } from '@tanstack/react-query'
 import Providers from '../providers'
 import ClientApp from '../client-app'
-import { fetchAnnouncements, fetchChapters, fetchHomeCollections, fetchMangaBySlug, fetchMangaList, listGenres } from '../../api/library'
+import { fetchAnnouncements, fetchBanners, fetchChapters, fetchHomeCollections, fetchMangaBySlug, fetchMangaList, listGenres } from '../../api/library'
 import { queryKeys } from '../../lib/queryKeys'
 
 export const dynamic = 'force-dynamic'
@@ -51,6 +51,7 @@ export default async function AppRoute({ params, searchParams }: RouteProps) {
     await Promise.all([
       queryClient.prefetchQuery({ queryKey: queryKeys.home, queryFn: fetchHomeCollections }),
       queryClient.prefetchQuery({ queryKey: queryKeys.announcements, queryFn: async () => (await fetchAnnouncements()) ?? [] }),
+      queryClient.prefetchQuery({ queryKey: queryKeys.banners, queryFn: async () => (await fetchBanners()) ?? [] }),
     ])
   } else if (route === '/explore' || route === '/search') {
     await Promise.all([

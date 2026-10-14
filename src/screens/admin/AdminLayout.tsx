@@ -9,6 +9,7 @@ const menu = [
   { to: '/admin/genres', label: 'Genre', end: false },
   { to: '/admin/authors', label: 'Pengarang', end: false },
   { to: '/admin/chapters', label: 'Chapter', end: false },
+  { to: '/admin/banners', label: 'Banner', end: false },
   { to: '/admin/comments', label: 'Komentar', end: false },
   { to: '/admin/announcements', label: 'Pengumuman', end: false },
 ]

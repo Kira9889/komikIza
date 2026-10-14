@@ -21,6 +21,7 @@ const AdminAuthors = lazy(() => import('./screens/admin/AdminAuthors'))
 const AdminChapters = lazy(() => import('./screens/admin/AdminChapters'))
 const AdminComments = lazy(() => import('./screens/admin/AdminComments'))
 const AdminAnnouncements = lazy(() => import('./screens/admin/AdminAnnouncements'))
+const AdminBanners = lazy(() => import('./screens/admin/AdminBanners'))
 
 function RouteFallback() {
   return (
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="chapters" element={<AdminChapters />} />
           <Route path="comments" element={<AdminComments />} />
           <Route path="announcements" element={<AdminAnnouncements />} />
+          <Route path="banners" element={<AdminBanners />} />
         </Route>
 
         <Route path="*" element={<Home />} />

@@ -232,6 +232,23 @@ create table if not exists public.announcements (
 );
 
 -- ------------------------------------------------------------
+-- BANNER HOME (dikelola dari panel admin)
+-- Gambar statis atau animasi (GIF/WebP) maupun video pendek. Bila
+-- manga_id diisi, klik banner/READ NOW menuju detail manga tersebut.
+-- ------------------------------------------------------------
+create table if not exists public.banners (
+  id         uuid primary key default gen_random_uuid(),
+  title      text not null default '',
+  image_url  text not null,
+  media_type text not null default 'image' check (media_type in ('image','video')),
+  manga_id   uuid references public.manga(id) on delete set null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_banners_order on public.banners(sort_order asc, created_at desc);
+
+-- ------------------------------------------------------------
 -- RLS: kunci API bawaan Supabase (PostgREST). Aplikasi hanya lewat
 -- backend Express (koneksi owner, tidak kena RLS), jadi tanpa policy =
 -- tolak SEMUA akses langsung via anon key. Tanpa ini, siapa pun yang
@@ -257,5 +274,6 @@ alter table public.history enable row level security;
 alter table public.read_chapters enable row level security;
 alter table public.comments enable row level security;
 alter table public.announcements enable row level security;
+alter table public.banners enable row level security;
 alter table public.schema_seeds enable row level security;
 

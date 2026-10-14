@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchAnnouncements, fetchHomeCollections } from '../api/library'
-import type { Announcement, HomeCollections, Manga } from '../types'
+import { fetchAnnouncements, fetchBanners, fetchHomeCollections } from '../api/library'
+import type { Announcement, Banner, HomeCollections } from '../types'
 import { queryKeys } from '../lib/queryKeys'
 import MangaCard from '../components/manga/MangaCard'
 import SectionTitle from '../components/ui/SectionTitle'
 import FilterTabs from '../components/ui/FilterTabs'
-import { displayRating } from '../lib/stats'
 import { ArrowLeftIcon, ArrowRightIcon, BookIcon, StarIcon } from '../icons'
 
 export default function Home() {
@@ -22,6 +21,11 @@ export default function Home() {
     queryKey: queryKeys.announcements,
     queryFn: async () => (await fetchAnnouncements()) ?? [],
   })
+  // Banner sepenuhnya dikelola admin. Bila belum ada banner, hero tidak tampil.
+  const { data: banners = [] } = useQuery<Banner[]>({
+    queryKey: queryKeys.banners,
+    queryFn: async () => (await fetchBanners()) ?? [],
+  })
 
   useEffect(() => {
     document.title = 'Tenshi.My.id — Digital Manga Library'
@@ -33,9 +37,21 @@ export default function Home() {
     return () => clearInterval(t)
   }, [])
 
-  // Slide hero: judul yang baru update + punya cover. (Hook harus di atas
-  // early-return agar jumlah hook konsisten tiap render.)
-  const hero = useMemo(() => (data?.updates ?? []).filter(m => m.cover_url).slice(0, 6), [data])
+  // Slide hero murni dari banner buatan admin. Tidak ada fallback: bila admin
+  // belum menambahkan banner, hero tidak dirender sama sekali.
+  const slides = useMemo<HeroSlide[]>(
+    () =>
+      banners.map(b => ({
+        key: b.id,
+        title: b.title,
+        image: b.image_url,
+        mediaType: b.media_type,
+        badge: b.manga_type ?? undefined,
+        rating: b.manga_shinigami_rating || b.manga_rating || undefined,
+        href: b.manga_slug ? `/manga/${b.manga_slug}` : undefined,
+      })),
+    [banners],
+  )
 
   if (!data) return <HomeSkeleton />
 
@@ -44,10 +60,12 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-6xl px-4">
-      {/* Banner */}
-      <section className="mt-4 md:mt-8">
-        <HeroCarousel items={hero} />
-      </section>
+      {/* Banner — hanya tampil bila admin sudah menambahkan banner. */}
+      {slides.length > 0 && (
+        <section className="mt-4 md:mt-8">
+          <HeroCarousel items={slides} />
+        </section>
+      )}
 
       {/* Pengumuman */}
       {announcements.length > 0 && (
@@ -149,9 +167,20 @@ function Announcement({ title, time, body }: { title: string; time: string; body
   )
 }
 
+// Satu slide hero dari banner yang dikelola admin.
+interface HeroSlide {
+  key: string
+  title: string
+  image: string
+  mediaType: 'image' | 'video'
+  badge?: string
+  rating?: number
+  href?: string
+}
+
 // Banner hero ala situs baca modern: background banner penuh + badge tipe &
 // rating + judul + tombol baca + panah + indikator titik.
-function HeroCarousel({ items }: { items: Manga[] }) {
+function HeroCarousel({ items }: { items: HeroSlide[] }) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
   const [loaded, setLoaded] = useState<Record<string, boolean>>({})
@@ -165,8 +194,7 @@ function HeroCarousel({ items }: { items: Manga[] }) {
 
   if (!count) return null
   const active = index % count
-  const m = items[active]
-  const rating = displayRating(m)
+  const s = items[active]
 
   return (
     <div
@@ -174,55 +202,79 @@ function HeroCarousel({ items }: { items: Manga[] }) {
       onMouseLeave={() => setPaused(false)}
       className="relative mb-8 overflow-hidden rounded-2xl bg-gray-900 shadow-2xl"
     >
-      <div className="relative aspect-[16/9] max-h-[420px] min-h-[200px] w-full overflow-hidden sm:aspect-[21/9] md:aspect-[24/9]">
-        {items.map((s, i) => (
+      <div className="relative aspect-video max-h-105 min-h-50 w-full overflow-hidden sm:aspect-21/9 md:aspect-24/9">
+        {items.map((item, i) => (
           <div
-            key={s.id}
+            key={item.key}
             aria-hidden={i !== active}
             className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${i === active ? 'opacity-100' : 'opacity-0'}`}
           >
-            {!loaded[s.id] && (
-              <div className="absolute inset-0 flex min-h-[200px] animate-pulse items-center justify-center bg-gray-800">
+            {!loaded[item.key] && (
+              <div className="absolute inset-0 flex min-h-50 animate-pulse items-center justify-center bg-gray-800">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-700 border-t-primary-500" />
               </div>
             )}
-            <img
-              src={s.banner_url || s.cover_url}
-              alt={s.title}
-              loading={i === 0 ? 'eager' : 'lazy'}
-              onLoad={() => setLoaded(p => ({ ...p, [s.id]: true }))}
-              className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[s.id] ? 'opacity-100' : 'opacity-0'}`}
-            />
+            {item.mediaType === 'video' ? (
+              <video
+                src={item.image}
+                autoPlay
+                muted
+                loop
+                playsInline
+                onLoadedData={() => setLoaded(p => ({ ...p, [item.key]: true }))}
+                className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[item.key] ? 'opacity-100' : 'opacity-0'}`}
+              />
+            ) : (
+              <img
+                src={item.image}
+                alt={item.title}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                onLoad={() => setLoaded(p => ({ ...p, [item.key]: true }))}
+                className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[item.key] ? 'opacity-100' : 'opacity-0'}`}
+              />
+            )}
           </div>
         ))}
 
         <div className="pointer-events-none absolute inset-0 bg-linear-to-r from-gray-950/70 via-gray-950/20 to-transparent" />
 
         <div className="absolute top-3 left-3 z-10 flex items-center gap-2 sm:top-4 sm:left-4">
-            <span className="rounded-md bg-primary-500 px-2 py-0.5 text-[9px] font-black tracking-wider text-white uppercase shadow-md sm:px-2.5 sm:py-1 sm:text-xs">
-              {m.type}
+            {s.badge && (
+              <span className="rounded-md bg-primary-500 px-2 py-0.5 text-[9px] font-black tracking-wider text-white uppercase shadow-md sm:px-2.5 sm:py-1 sm:text-xs">
+                {s.badge}
+              </span>
+            )}
+            {typeof s.rating === 'number' && s.rating > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-primary-400/25 bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-primary-400 shadow-md backdrop-blur-md sm:px-2 sm:py-1 sm:text-xs">
+                <StarIcon className="h-2.5 w-2.5 fill-primary-400 sm:h-3 sm:w-3" />
+              <span>{s.rating.toFixed(1)}</span>
             </span>
-            <span className="inline-flex items-center gap-1 rounded-md border border-primary-400/25 bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-primary-400 shadow-md backdrop-blur-md sm:px-2 sm:py-1 sm:text-xs">
-              <StarIcon className="h-2.5 w-2.5 fill-primary-400 sm:h-3 sm:w-3" />
-            <span>{rating.toFixed(1)}</span>
-          </span>
+            )}
         </div>
 
         <div className="absolute right-3 bottom-2.5 left-3 z-10 flex flex-col gap-1.5 sm:right-6 sm:bottom-6 sm:left-6 sm:gap-2.5">
-          <Link to={`/manga/${m.slug}`}>
-            <h2 className="line-clamp-2 max-w-2xl text-sm leading-tight font-extrabold tracking-wide text-white drop-shadow-lg sm:text-2xl md:text-3xl">
-              {m.title}
-            </h2>
-          </Link>
-          <div className="flex items-center gap-2 pt-0.5">
-            <Link
-              to={`/manga/${m.slug}`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-md transition-all hover:bg-primary-600 active:scale-95 sm:rounded-xl sm:px-5 sm:py-2.5 sm:text-sm"
-            >
-              <BookIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span>READ NOW</span>
+          {s.href ? (
+            <Link to={s.href}>
+              <h2 className="line-clamp-2 max-w-2xl text-sm leading-tight font-extrabold tracking-wide text-white drop-shadow-lg sm:text-2xl md:text-3xl">
+                {s.title}
+              </h2>
             </Link>
-          </div>
+          ) : (
+            <h2 className="line-clamp-2 max-w-2xl text-sm leading-tight font-extrabold tracking-wide text-white drop-shadow-lg sm:text-2xl md:text-3xl">
+              {s.title}
+            </h2>
+          )}
+          {s.href && (
+            <div className="flex items-center gap-2 pt-0.5">
+              <Link
+                to={s.href}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-md transition-all hover:bg-primary-600 active:scale-95 sm:rounded-xl sm:px-5 sm:py-2.5 sm:text-sm"
+              >
+                <BookIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span>READ NOW</span>
+              </Link>
+            </div>
+          )}
         </div>
 
         {count > 1 && (
@@ -249,9 +301,9 @@ function HeroCarousel({ items }: { items: Manga[] }) {
 
       {count > 1 && (
         <div className="absolute right-4 bottom-2 z-20 flex items-center gap-1.5">
-          {items.map((s, i) => (
+          {items.map((item, i) => (
             <button
-              key={s.id}
+              key={item.key}
               type="button"
               onClick={() => setIndex(i)}
               aria-label={`Go to slide ${i + 1}`}
@@ -290,7 +342,7 @@ function AnnouncementCarousel({ announcements, now }: { announcements: Announcem
         <div className="mb-3">
           <h2 className="font-display text-lg font-bold text-general-100">Pengumuman</h2>
         </div>
-        <div className="min-h-[5rem] transition-opacity duration-300">
+        <div className="min-h-20 transition-opacity duration-300">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-general-100">{a.title}</h3>
             <span className="shrink-0 text-[11px] text-general-400">{timeAgo(a.created_at, now)}</span>
@@ -339,7 +391,7 @@ function HomeSkeleton() {
       </div>
       <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="animate-pulse aspect-[3/4] rounded-lg bg-(--card)" />
+          <div key={i} className="animate-pulse aspect-3/4 rounded-lg bg-(--card)" />
         ))}
       </div>
     </div>

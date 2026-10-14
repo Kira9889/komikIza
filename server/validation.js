@@ -17,6 +17,7 @@ export const registerSchema = z.object({
 export const announcementSchema = z.object({
   title: z.string().trim().min(1, 'Judul wajib diisi').max(120, 'Judul maksimal 120 karakter'),
   body: z.string().trim().max(5000, 'Isi pengumuman maksimal 5000 karakter').default(''),
+  image_url: z.string().trim().max(2048, 'URL terlalu panjang').default(''),
 })
 
 export const bannerSchema = z.object({

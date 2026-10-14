@@ -228,8 +228,12 @@ create table if not exists public.announcements (
   id         uuid primary key default gen_random_uuid(),
   title      text not null,
   body       text not null default '',
+  image_url  text not null default '',
   created_at timestamptz not null default now()
 );
+
+-- Untuk database lama: tambahkan kolom gambar tanpa menghapus data.
+alter table public.announcements add column if not exists image_url text not null default '';
 
 -- ------------------------------------------------------------
 -- BANNER HOME (dikelola dari panel admin)

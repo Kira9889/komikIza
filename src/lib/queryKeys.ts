@@ -1,6 +1,7 @@
 export const queryKeys = {
   home: ['home-collections'] as const,
   announcements: ['announcements'] as const,
+  announcement: (id: string) => ['announcement', id] as const,
   banners: ['banners'] as const,
   mangaList: ['manga-list'] as const,
   genres: ['genres'] as const,

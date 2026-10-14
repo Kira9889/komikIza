@@ -297,17 +297,22 @@ export async function fetchAnnouncements(): Promise<Announcement[] | null> {
   }
 }
 
-export async function saveAnnouncement(input: { id?: string; title: string; body: string }): Promise<void> {
+export async function fetchAnnouncementById(id: string): Promise<Announcement | null> {
+  if (!(await isBackendOnline())) return null
+  try {
+    return await apiFetch<Announcement>(`/announcements/${encodeURIComponent(id)}`)
+  } catch (e) {
+    console.error(e)
+    return null
+  }
+}
+
+export async function saveAnnouncement(input: { id?: string; title: string; body: string; image_url: string }): Promise<void> {
+  const body = JSON.stringify({ title: input.title, body: input.body, image_url: input.image_url })
   if (input.id) {
-    await apiFetch(`/announcements/${input.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ title: input.title, body: input.body }),
-    })
+    await apiFetch(`/announcements/${input.id}`, { method: 'PUT', body })
   } else {
-    await apiFetch('/announcements', {
-      method: 'POST',
-      body: JSON.stringify({ title: input.title, body: input.body }),
-    })
+    await apiFetch('/announcements', { method: 'POST', body })
   }
 }
 

@@ -22,6 +22,8 @@ const AdminChapters = lazy(() => import('./screens/admin/AdminChapters'))
 const AdminComments = lazy(() => import('./screens/admin/AdminComments'))
 const AdminAnnouncements = lazy(() => import('./screens/admin/AdminAnnouncements'))
 const AdminBanners = lazy(() => import('./screens/admin/AdminBanners'))
+const AnnouncementList = lazy(() => import('./screens/AnnouncementList'))
+const AnnouncementDetail = lazy(() => import('./screens/AnnouncementDetail'))
 
 function RouteFallback() {
   return (
@@ -42,6 +44,8 @@ export default function App() {
         <Route path="/search" element={<Search />} />
         <Route path="/manga/:slug" element={<MangaDetail />} />
         <Route path="/manga/:slug/chapter/:chapterId" element={<ReadChapter />} />
+        <Route path="/announcement" element={<AnnouncementList />} />
+        <Route path="/announcement/:id" element={<AnnouncementDetail />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />

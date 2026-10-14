@@ -1,20 +1,26 @@
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { fetchAnnouncements, saveAnnouncement, deleteAnnouncement } from '../../api/library'
 import type { Announcement } from '../../types'
+import { queryKeys } from '../../lib/queryKeys'
 import { PlusIcon, TrashIcon, EditIcon } from '../../icons'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 export default function AdminAnnouncements() {
+  const queryClient = useQueryClient()
   const [items, setItems] = useState<Announcement[]>([])
   const [editing, setEditing] = useState<Announcement | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const reload = () => {
     fetchAnnouncements().then(list => setItems(list ?? [])).catch(() => {})
+    // Segarkan cache Home/daftar agar pengumuman terbaru langsung terlihat.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.announcements })
   }
 
   useEffect(() => {
@@ -25,6 +31,7 @@ export default function AdminAnnouncements() {
     setEditing(null)
     setTitle('')
     setBody('')
+    setImageUrl('')
     setError('')
   }
 
@@ -32,6 +39,7 @@ export default function AdminAnnouncements() {
     setEditing(a)
     setTitle(a.title)
     setBody(a.body)
+    setImageUrl(a.image_url ?? '')
     setError('')
   }
 
@@ -41,7 +49,8 @@ export default function AdminAnnouncements() {
     setSaving(true)
     setError('')
     try {
-      await saveAnnouncement({ id: editing?.id, title: title.trim(), body: body.trim() })
+      await saveAnnouncement({ id: editing?.id, title: title.trim(), body: body.trim(), image_url: imageUrl.trim() })
+      if (editing?.id) void queryClient.invalidateQueries({ queryKey: queryKeys.announcement(editing.id) })
       reload()
       openCreate()
     } catch (err: any) {
@@ -54,6 +63,7 @@ export default function AdminAnnouncements() {
   const remove = async () => {
     if (!pendingDelete) return
     await deleteAnnouncement(pendingDelete)
+    void queryClient.invalidateQueries({ queryKey: queryKeys.announcement(pendingDelete) })
     setPendingDelete(null)
     reload()
   }
@@ -83,6 +93,19 @@ export default function AdminAnnouncements() {
           maxLength={120}
           className="input-manga"
         />
+        <input
+          value={imageUrl}
+          onChange={e => setImageUrl(e.target.value)}
+          placeholder="URL gambar thumbnail (opsional, https://…)"
+          className="input-manga"
+        />
+        {imageUrl.trim() && (
+          <img
+            src={imageUrl.trim()}
+            alt=""
+            className="h-20 w-20 rounded-lg border border-(--line) object-cover"
+          />
+        )}
         <textarea
           value={body}
           onChange={e => setBody(e.target.value)}
@@ -110,6 +133,9 @@ export default function AdminAnnouncements() {
         {items.map(a => (
           <div key={a.id} className="flex items-start justify-between gap-3 rounded-lg border border-(--line) bg-(--card) p-3">
             <div className="min-w-0">
+              {a.image_url && (
+                <img src={a.image_url} alt="" loading="lazy" className="mb-2 h-16 w-16 rounded-md object-cover" />
+              )}
               <div className="text-sm font-semibold text-general-100">{a.title}</div>
               <div className="mt-0.5 line-clamp-2 text-xs text-general-400">{a.body}</div>
               <div className="mt-1 text-[11px] text-general-400">

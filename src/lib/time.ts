@@ -24,3 +24,15 @@ export function timeAgo(input: string | number): string {
     year: 'numeric',
   })
 }
+
+// Tanggal panjang Indonesia: "16 November 2025".
+export function formatDate(input: string | number): string {
+  const ts =
+    typeof input === 'number'
+      ? input < 1e12
+        ? input * 1000
+        : input
+      : new Date(input).getTime()
+  if (!ts || Number.isNaN(ts)) return ''
+  return new Date(ts).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+}

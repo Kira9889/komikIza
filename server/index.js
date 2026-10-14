@@ -1754,8 +1754,21 @@ app.delete('/api/comments/:id', requireAuth, async (req, res) => {
 // Baca publik (sidebar Home), tulis admin saja.
 app.get('/api/announcements', async (_req, res) => {
   try {
-    const rows = await query('select id, title, body, created_at from announcements order by created_at desc')
+    const rows = await query('select id, title, body, image_url, created_at from announcements order by created_at desc')
     res.json(rows)
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Gagal mengambil pengumuman' })
+  }
+})
+
+app.get('/api/announcements/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
+    const rows = await query('select id, title, body, image_url, created_at from announcements where id = $1', [id])
+    if (!rows[0]) return res.status(404).json({ error: 'Pengumuman tidak ditemukan' })
+    res.json(rows[0])
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Gagal mengambil pengumuman' })
@@ -1766,10 +1779,10 @@ app.post('/api/announcements', requireAuth, requireAdmin, async (req, res) => {
   try {
     const parsed = announcementSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data pengumuman tidak valid' })
-    const { title, body } = parsed.data
+    const { title, body, image_url } = parsed.data
     const rows = await query(
-      'insert into announcements (title, body) values ($1, $2) returning id, title, body, created_at',
-      [title, body],
+      'insert into announcements (title, body, image_url) values ($1, $2, $3) returning id, title, body, image_url, created_at',
+      [title, body, image_url],
     )
     res.json(rows[0])
   } catch (e) {
@@ -1784,10 +1797,10 @@ app.put('/api/announcements/:id', requireAuth, requireAdmin, async (req, res) =>
     if (!isValidUuid(id)) return res.status(400).json({ error: 'ID tidak valid' })
     const parsed = announcementSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data pengumuman tidak valid' })
-    const { title, body } = parsed.data
+    const { title, body, image_url } = parsed.data
     const rows = await query(
-      'update announcements set title = $1, body = $2 where id = $3 returning id, title, body, created_at',
-      [title, body, id],
+      'update announcements set title = $1, body = $2, image_url = $3 where id = $4 returning id, title, body, image_url, created_at',
+      [title, body, image_url, id],
     )
     if (!rows[0]) return res.status(404).json({ error: 'Pengumuman tidak ditemukan' })
     res.json(rows[0])

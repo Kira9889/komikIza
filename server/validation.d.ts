@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export declare const loginSchema: z.ZodType<{ email: string; password: string }>
 export declare const registerSchema: z.ZodType<{ email: string; username: string; password: string }>
-export declare const announcementSchema: z.ZodType<{ title: string; body: string }>
+export declare const announcementSchema: z.ZodType<{ title: string; body: string; image_url: string }>
 export declare const bannerSchema: z.ZodType<{
   title: string
   image_url: string

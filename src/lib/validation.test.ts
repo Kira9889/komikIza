@@ -19,7 +19,11 @@ describe('request validation schemas', () => {
   })
 
   it('trims announcement content and rejects an empty title', () => {
-    expect(announcementSchema.parse({ title: '  Update  ', body: '  Isi  ' })).toEqual({ title: 'Update', body: 'Isi' })
+    expect(announcementSchema.parse({ title: '  Update  ', body: '  Isi  ' })).toEqual({
+      title: 'Update',
+      body: 'Isi',
+      image_url: '',
+    })
     expect(announcementSchema.safeParse({ title: '  ', body: '' }).success).toBe(false)
   })
 

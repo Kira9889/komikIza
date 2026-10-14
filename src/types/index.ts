@@ -88,6 +88,8 @@ export interface Announcement {
   id: string
   title: string
   body: string
+  /** Gambar thumbnail; kosong = tampilkan tanpa gambar. */
+  image_url: string
   created_at: string
 }
 

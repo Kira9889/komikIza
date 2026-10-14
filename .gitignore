@@ -14,3 +14,6 @@ server/.env
 server/backups/
 server/.sync-last-run
 *.log
+backup.sql
+.worktrees/
+*.tsbuildinfo

@@ -1,17 +1,13 @@
 // Impor judul dari Luvyaa (WordPress TsReader) ke R2 + database.
 // Alur per chapter: baca halaman chapter → ambil daftar gambar → unduh ke R2
 // → simpan chapter dengan URL R2. Gambar jadi milik sendiri (tidak hotlink).
-//
 // SOPAN: semua request sekuensial (1 koneksi), jeda acak antar request,
 // retry dengan backoff kalau kena 429/5xx. JANGAN naikkan kecepatan —
 // IP rumah bisa di-block kalau agresif.
-//
 // Butuh di server/.env: DATABASE_URL + R2_* (sama seperti import-r2.mjs).
-//
 // Pakai:
 //   node import-luvyaa.mjs --series=man-with-the-ghost --prefix="man with the ghost" --from=10
 //   node import-luvyaa.mjs --series=man-with-the-ghost --prefix="man with the ghost" --from=10 --to=20 --type=manhwa
-//
 // Aman diulang: chapter yang namanya sudah ada di DB dilewati.
 import dotenv from 'dotenv'
 import pg from 'pg'
@@ -75,8 +71,8 @@ const pool = new pg.Pool({
   connectionTimeoutMillis: 10000,
   max: 2,
 })
-const query = async (text, params) => (await pool.query(text, params)).rows
 
+const query = async (text, params) => (await pool.query(text, params)).rows
 // Samakan dengan UA Chrome asli (clearance bisa gagal kalau beda versi).
 // Isi di server/.env: LUVYAA_UA="<isi navigator.userAgent dari F12 Console>"
 const BROWSER_UA = process.env.LUVYAA_UA ||
@@ -94,7 +90,6 @@ const extOf = url => {
   const m = String(url).split('?')[0].match(/\.([a-z0-9]+)$/i)
   return m ? m[1].toLowerCase() : 'webp'
 }
-
 // Fetch sopan dengan retry backoff (429/5xx ditunggu, bukan dihajar).
 async function politeFetch(url, { referer, binary = false } = {}, retries = 4) {
   for (let attempt = 0; ; attempt += 1) {

@@ -5,6 +5,7 @@ import { fetchAnnouncements, fetchBanners, fetchHomeCollections } from '../api/l
 import type { Announcement, Banner, HomeCollections } from '../types'
 import { queryKeys } from '../lib/queryKeys'
 import MangaCard from '../components/manga/MangaCard'
+import AnnouncementCard from '../components/announcement/AnnouncementCard'
 import SectionTitle from '../components/ui/SectionTitle'
 import FilterTabs from '../components/ui/FilterTabs'
 import { ArrowLeftIcon, ArrowRightIcon, BookIcon, StarIcon } from '../icons'
@@ -14,8 +15,6 @@ export default function Home() {
   const [recoTab, setRecoTab] = useState('manhwa')
   const [popTab, setPopTab] = useState('daily')
   const [updTab, setUpdTab] = useState('project')
-  // Jam berjalan agar label waktu pengumuman selalu real-time.
-  const [now, setNow] = useState(0)
   // Pengumuman hanya berasal dari backend agar yang sudah dihapus admin tidak muncul lagi.
   const { data: announcements = [] } = useQuery<Announcement[]>({
     queryKey: queryKeys.announcements,
@@ -29,12 +28,6 @@ export default function Home() {
 
   useEffect(() => {
     document.title = 'Tenshi.My.id — Digital Manga Library'
-  }, [])
-
-  useEffect(() => {
-    setNow(Date.now())
-    const t = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(t)
   }, [])
 
   // Slide hero murni dari banner buatan admin. Tidak ada fallback: bila admin
@@ -70,7 +63,7 @@ export default function Home() {
       {/* Pengumuman */}
       {announcements.length > 0 && (
         <section className="mt-6">
-          <AnnouncementCarousel announcements={announcements} now={now} />
+          <AnnouncementCarousel announcements={announcements} />
         </section>
       )}
 
@@ -137,32 +130,6 @@ export default function Home() {
           ))}
         </div>
       </section>
-    </div>
-  )
-}
-
-function timeAgo(iso: string, now: number): string {
-  const diff = Math.max(0, now - new Date(iso).getTime())
-  const minutes = Math.floor(diff / 60_000)
-  if (minutes < 1) return 'Baru saja'
-  if (minutes < 60) return `${minutes} menit lalu`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} jam lalu`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days} hari lalu`
-  const weeks = Math.floor(days / 7)
-  if (weeks < 5) return `${weeks} minggu lalu`
-  return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-function Announcement({ title, time, body }: { title: string; time: string; body: string }) {
-  return (
-    <div className="rounded-lg border border-(--line) bg-(--card-2) p-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-general-100">{title}</h3>
-        <span className="text-[11px] text-general-400">{time}</span>
-      </div>
-      <p className="mt-1 text-xs leading-relaxed text-general-400">{body}</p>
     </div>
   )
 }
@@ -318,62 +285,85 @@ function HeroCarousel({ items }: { items: HeroSlide[] }) {
   )
 }
 
-// Carousel pengumuman horizontal: satu kartu per slide, bisa swipe/klik panah.
-function AnnouncementCarousel({ announcements, now }: { announcements: Announcement[]; now: number }) {
+// Carousel pengumuman: dua kartu per slide, header + tombol panah + indikator.
+function AnnouncementCarousel({ announcements }: { announcements: Announcement[] }) {
   const [index, setIndex] = useState(0)
-  const count = announcements.length
+  const perSlide = 2
+  const pages = Math.max(1, Math.ceil(announcements.length / perSlide))
+  const active = Math.min(index, pages - 1)
+  const slides: Announcement[][] = []
+  for (let i = 0; i < announcements.length; i += perSlide) {
+    slides.push(announcements.slice(i, i + perSlide))
+  }
 
-  if (count === 0) return null
-  const a = announcements[index % count]
+  if (announcements.length === 0) return null
+
+  const go = (dir: -1 | 1) => setIndex(i => (i + dir + pages) % pages)
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
-      {count > 1 && (
-        <button
-          type="button"
-          onClick={() => setIndex((index - 1 + count) % count)}
-          aria-label="Pengumuman sebelumnya"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-(--line) bg-(--card) text-general-400 shadow-md transition hover:bg-primary-500 hover:text-white sm:h-10 sm:w-10"
+    <div className="flex flex-col gap-4">
+      <div className="flex items-end justify-between">
+        <h2 className="font-display text-xl font-semibold text-general-100 md:text-2xl">Pengumuman</h2>
+        <Link to="/announcement" className="text-base text-general-300 transition-colors hover:text-primary-500 md:text-lg">
+          Semua
+        </Link>
+      </div>
+
+      <div className="relative w-full overflow-hidden">
+        <div
+          className="flex transition-transform duration-500 ease-out"
+          style={{ transform: `translateX(-${active * 100}%)` }}
         >
-          <ArrowLeftIcon className="h-5 w-5" />
-        </button>
-      )}
-      <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-(--line) bg-(--card) p-4 shadow-md">
-        <div className="mb-3">
-          <h2 className="font-display text-lg font-bold text-general-100">Pengumuman</h2>
+          {slides.map((group, si) => (
+            <div
+              key={si}
+              aria-hidden={si !== active}
+              className="flex w-full shrink-0 flex-col gap-4"
+            >
+              {group.map(a => (
+                <AnnouncementCard key={a.id} announcement={a} />
+              ))}
+            </div>
+          ))}
         </div>
-        <div className="min-h-20 transition-opacity duration-300">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-general-100">{a.title}</h3>
-            <span className="shrink-0 text-[11px] text-general-400">{timeAgo(a.created_at, now)}</span>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-general-400">{a.body}</p>
-        </div>
-        {count > 1 && (
-          <div className="mt-3 flex items-center justify-center gap-1.5">
-            {announcements.map((_, i) => (
+      </div>
+
+      {pages > 1 && (
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            disabled={active === 0}
+            aria-label="Pengumuman sebelumnya"
+            className="flex h-9 w-9 items-center justify-center rounded-md bg-(--card) text-general-100 transition-opacity disabled:opacity-40"
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+          </button>
+          <div className="flex items-center justify-center gap-2">
+            {slides.map((_, i) => (
               <button
                 key={i}
                 type="button"
                 onClick={() => setIndex(i)}
-                aria-label={`Pengumuman ${i + 1}`}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i === index % count ? 'w-6 bg-primary-500' : 'w-1.5 bg-general-500 hover:bg-general-400'
+                aria-label={`Pengumuman halaman ${i + 1}`}
+                className={`grid h-4 w-4 place-items-center rounded-full border transition-colors ${
+                  i === active ? 'border-primary-400' : 'border-transparent'
                 }`}
-              />
+              >
+                <span className={`h-2 w-2 rounded-full ${i === active ? 'bg-primary-500' : 'bg-general-200'}`} />
+              </button>
             ))}
           </div>
-        )}
-      </div>
-      {count > 1 && (
-        <button
-          type="button"
-          onClick={() => setIndex((index + 1) % count)}
-          aria-label="Pengumuman berikutnya"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-(--line) bg-(--card) text-general-400 shadow-md transition hover:bg-primary-500 hover:text-white sm:h-10 sm:w-10"
-        >
-          <ArrowRightIcon className="h-5 w-5" />
-        </button>
+          <button
+            type="button"
+            onClick={() => go(1)}
+            disabled={active === pages - 1}
+            aria-label="Pengumuman berikutnya"
+            className="flex h-9 w-9 items-center justify-center rounded-md bg-(--card) text-general-100 transition-opacity disabled:opacity-40"
+          >
+            <ArrowRightIcon className="h-4 w-4" />
+          </button>
+        </div>
       )}
     </div>
   )

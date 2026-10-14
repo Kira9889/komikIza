@@ -28,7 +28,7 @@ export default function MaintenanceScreen() {
         </div>
 
         <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-3">
-          Kami Sedang Berbenah! 🛠️
+          Kami Sedang Berbenah!
         </h1>
 
         <p className="text-sm sm:text-base text-general-300 leading-relaxed mb-6">
@@ -66,7 +66,7 @@ export default function MaintenanceScreen() {
         </div>
 
         <p className="mt-6 text-xs text-general-400">
-          Terima kasih banyak atas kesabaran dan dukungan teman-teman pembaca setia Tenshi! ✨
+          Terima kasih banyak atas kesabaran dan dukungan teman-teman pembaca setia Tenshi!
         </p>
       </main>
 

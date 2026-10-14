@@ -8,7 +8,8 @@
   "preview_urls": true,
   "vars": {
     "API_SERVER_URL": "https://izalib-api.onrender.com/api",
-    "NEXT_PUBLIC_API_URL": "https://izalib-api.onrender.com/api"
+    "NEXT_PUBLIC_API_URL": "https://izalib-api.onrender.com/api",
+    "NEXT_PUBLIC_MAINTENANCE": "false"
   },
   "assets": {
     "directory": ".open-next/assets",

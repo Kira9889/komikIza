@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { dehydrate, QueryClient } from '@tanstack/react-query'
 import Providers from '../providers'
 import ClientApp from '../client-app'
+import MaintenanceScreen from '../../components/MaintenanceScreen'
 import { fetchAnnouncements, fetchBanners, fetchChapters, fetchHomeCollections, fetchMangaBySlug, fetchMangaList, listGenres } from '../../api/library'
 import { queryKeys } from '../../lib/queryKeys'
 
@@ -38,6 +39,9 @@ export async function generateMetadata({ params, searchParams }: RouteProps): Pr
   }
   if (route === '/login') return { title: 'Masuk' }
   if (route === '/register') return { title: 'Daftar' }
+  if (route === '/maintenance' || (process.env.NEXT_PUBLIC_MAINTENANCE === 'true' && !route.startsWith('/admin'))) {
+    return { title: 'Pemeliharaan Sistem — Tenshi' }
+  }
   return { title: 'Digital Manga Library' }
 }
 
@@ -45,6 +49,17 @@ export default async function AppRoute({ params, searchParams }: RouteProps) {
   const [{ segments = [] }, query] = await Promise.all([params, searchParams])
   const route = `/${segments.join('/')}` || '/'
   const location = `${route === '/' ? '' : route}${toSearchString(query)}` || '/'
+
+  const isMaintenanceMode =
+    route === '/maintenance' ||
+    (process.env.NEXT_PUBLIC_MAINTENANCE === 'true' &&
+      !route.startsWith('/admin') &&
+      query.bypass !== '1')
+
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />
+  }
+
   const queryClient = new QueryClient()
 
   if (route === '/') {

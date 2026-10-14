@@ -117,8 +117,7 @@ export default function ReadChapter() {
           readerControlsOpen ? 'translate-y-0' : '-translate-y-full'
         } ${
           scrolled
-            ? 'border-b border-white/10 bg-[#0b0b0d]/95 backdrop-blur-md'
-            : 'border-b border-transparent bg-linear-to-b from-black/70 to-transparent'
+         
         }`}
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5">

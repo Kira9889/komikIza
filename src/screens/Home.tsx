@@ -7,6 +7,8 @@ import { queryKeys } from '../lib/queryKeys'
 import MangaCard from '../components/manga/MangaCard'
 import SectionTitle from '../components/ui/SectionTitle'
 import FilterTabs from '../components/ui/FilterTabs'
+import { displayRating } from '../lib/stats'
+import { ArrowLeftIcon, ArrowRightIcon, BookIcon, StarIcon } from '../icons'
 
 export default function Home() {
   const { data } = useQuery({ queryKey: queryKeys.home, queryFn: fetchHomeCollections })
@@ -44,33 +46,15 @@ export default function Home() {
     <div className="mx-auto max-w-6xl px-4">
       {/* Banner */}
       <section className="mt-4 md:mt-8">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <HeroCarousel items={hero} />
-
-          <aside className="rounded-xl border border-(--line) bg-(--card) p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold text-general-100">Pengumuman</h2>
-              <Link to="#" className="text-sm text-general-400 hover:text-primary-500">Semua</Link>
-            </div>
-            <div className="space-y-3">
-              {announcements.length === 0 ? (
-                <p className="rounded-lg border border-(--line) bg-(--card-2) px-3 py-6 text-center text-xs text-general-400">
-                  Tidak ada pengumuman.
-                </p>
-              ) : (
-                announcements.map(a => (
-                  <Announcement
-                    key={a.id}
-                    title={a.title}
-                    time={timeAgo(a.created_at, now)}
-                    body={a.body}
-                  />
-                ))
-              )}
-            </div>
-          </aside>
-        </div>
+        <HeroCarousel items={hero} />
       </section>
+
+      {/* Pengumuman */}
+      {announcements.length > 0 && (
+        <section className="mt-6">
+          <AnnouncementCarousel announcements={announcements} now={now} />
+        </section>
+      )}
 
       {/* Rekomendasi */}
       <section className="mt-12">
@@ -165,20 +149,12 @@ function Announcement({ title, time, body }: { title: string; time: string; body
   )
 }
 
-// Badge "CHAPTER 71" dari nomor chapter terbaru (fallback: nama chapter).
-function heroBadge(m: Manga): string {
-  if (m.latest_chapter_number && m.latest_chapter_number > 0) return `Chapter ${m.latest_chapter_number}`
-  const name = m.latest_chapter?.name ?? ''
-  const hit = name.match(/chapter\s*([\d.]+)/i)
-  if (hit) return `Chapter ${hit[1]}`
-  return 'Update'
-}
-
-// Hero carousel ala situs baca modern: background blur + badge chapter +
-// cover + judul + genre + sinopsis + panah + strip thumbnail.
+// Banner hero ala situs baca modern: background banner penuh + badge tipe &
+// rating + judul + tombol baca + panah + indikator titik.
 function HeroCarousel({ items }: { items: Manga[] }) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({})
   const count = items.length
 
   useEffect(() => {
@@ -188,113 +164,164 @@ function HeroCarousel({ items }: { items: Manga[] }) {
   }, [index, paused, count])
 
   if (!count) return null
-  const m = items[index % count]
-  const genres = (m.genres ?? []).map(g => (typeof g === 'string' ? g : g.name))
+  const active = index % count
+  const m = items[active]
+  const rating = displayRating(m)
 
   return (
     <div
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className="relative flex min-h-80 overflow-hidden rounded-xl border border-(--line) bg-[#0b0b0d] sm:min-h-96 lg:col-span-2"
+      className="relative mb-8 overflow-hidden rounded-2xl bg-gray-900 shadow-2xl"
     >
-      {/* Background blur per slide */}
-      {items.map((s, i) => (
-        <div
-          key={s.id}
-          aria-hidden={i !== index % count}
-          className={`absolute inset-0 transition-opacity duration-700 ${i === index % count ? 'opacity-100' : 'opacity-0'}`}
-        >
-          <img
-            src={s.banner_url || s.cover_url}
-            alt=""
-            loading={i === 0 ? 'eager' : 'lazy'}
-            className="h-full w-full scale-110 object-cover opacity-50 blur-2xl"
-          />
-          <div className="absolute inset-0 bg-linear-to-r from-black/90 via-black/60 to-black/30" />
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-linear-to-t from-black/90 to-transparent" />
-        </div>
-      ))}
+      <div className="relative aspect-[16/9] max-h-[420px] min-h-[200px] w-full overflow-hidden sm:aspect-[21/9] md:aspect-[24/9]">
+        {items.map((s, i) => (
+          <div
+            key={s.id}
+            aria-hidden={i !== active}
+            className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${i === active ? 'opacity-100' : 'opacity-0'}`}
+          >
+            {!loaded[s.id] && (
+              <div className="absolute inset-0 flex min-h-[200px] animate-pulse items-center justify-center bg-gray-800">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-700 border-t-primary-500" />
+              </div>
+            )}
+            <img
+              src={s.banner_url || s.cover_url}
+              alt={s.title}
+              loading={i === 0 ? 'eager' : 'lazy'}
+              onLoad={() => setLoaded(p => ({ ...p, [s.id]: true }))}
+              className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[s.id] ? 'opacity-100' : 'opacity-0'}`}
+            />
+          </div>
+        ))}
 
-      {/* Konten */}
-      <div className="relative flex w-full items-center gap-4 p-4 pb-16 sm:gap-6 sm:p-6 sm:pb-16 md:p-8 md:pb-16">
-        <Link to={`/manga/${m.slug}`} className="w-28 shrink-0 sm:w-40 md:w-48">
-          <img
-            src={m.cover_url}
-            alt={m.title}
-            className="aspect-[3/4] w-full rounded-lg object-cover shadow-2xl ring-1 ring-white/20"
-          />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <span className="inline-block rounded-full bg-primary-500 px-3 py-1 text-[11px] font-extrabold tracking-wide text-white uppercase sm:text-xs">
-            {heroBadge(m)}
+        <div className="pointer-events-none absolute inset-0 bg-linear-to-r from-gray-950/70 via-gray-950/20 to-transparent" />
+
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-2 sm:top-4 sm:left-4">
+            <span className="rounded-md bg-primary-500 px-2 py-0.5 text-[9px] font-black tracking-wider text-white uppercase shadow-md sm:px-2.5 sm:py-1 sm:text-xs">
+              {m.type}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-md border border-primary-400/25 bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-primary-400 shadow-md backdrop-blur-md sm:px-2 sm:py-1 sm:text-xs">
+              <StarIcon className="h-2.5 w-2.5 fill-primary-400 sm:h-3 sm:w-3" />
+            <span>{rating.toFixed(1)}</span>
           </span>
+        </div>
+
+        <div className="absolute right-3 bottom-2.5 left-3 z-10 flex flex-col gap-1.5 sm:right-6 sm:bottom-6 sm:left-6 sm:gap-2.5">
           <Link to={`/manga/${m.slug}`}>
-            <h2 className="mt-2 line-clamp-2 font-display text-xl leading-tight font-extrabold text-white sm:text-2xl md:text-4xl">
+            <h2 className="line-clamp-2 max-w-2xl text-sm leading-tight font-extrabold tracking-wide text-white drop-shadow-lg sm:text-2xl md:text-3xl">
               {m.title}
             </h2>
           </Link>
-          {genres.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5 sm:mt-3 sm:gap-2">
-              {genres.map(g => (
-                <span
-                  key={g}
-                  className="rounded-full border border-white/20 bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-neutral-200 sm:px-3 sm:py-1 sm:text-xs"
-                >
-                  {g}
-                </span>
-              ))}
-            </div>
-          )}
-          {m.description && (
-            <p className="mt-2 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/80 sm:mt-3 sm:line-clamp-3 sm:text-sm">
-              {m.description}
-            </p>
-          )}
-          <Link
-            to={`/manga/${m.slug}`}
-            className="mt-3 inline-block rounded-lg bg-primary-500 px-4 py-2 text-xs font-bold text-white transition hover:bg-primary-600 sm:mt-4 sm:text-sm"
-          >
-            Baca Sekarang
-          </Link>
+          <div className="flex items-center gap-2 pt-0.5">
+            <Link
+              to={`/manga/${m.slug}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-md transition-all hover:bg-primary-600 active:scale-95 sm:rounded-xl sm:px-5 sm:py-2.5 sm:text-sm"
+            >
+              <BookIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>READ NOW</span>
+            </Link>
+          </div>
         </div>
+
+        {count > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setIndex((index - 1 + count) % count)}
+              aria-label="Previous slide"
+              className="absolute top-1/2 left-2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/80 sm:left-4 sm:h-10 sm:w-10"
+            >
+              <ArrowLeftIcon className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIndex((index + 1) % count)}
+              aria-label="Next slide"
+              className="absolute top-1/2 right-2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-black/80 sm:right-4 sm:h-10 sm:w-10"
+            >
+              <ArrowRightIcon className="h-5 w-5" />
+            </button>
+          </>
+        )}
       </div>
 
-      {/* Panah */}
       {count > 1 && (
-        <>
-          <button
-            onClick={() => setIndex((index - 1 + count) % count)}
-            aria-label="Sebelumnya"
-            className="absolute top-1/2 left-2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/40 text-lg text-white backdrop-blur transition hover:bg-primary-500"
-          >
-            ‹
-          </button>
-          <button
-            onClick={() => setIndex((index + 1) % count)}
-            aria-label="Berikutnya"
-            className="absolute top-1/2 right-2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/40 text-lg text-white backdrop-blur transition hover:bg-primary-500"
-          >
-            ›
-          </button>
-        </>
-      )}
-
-      {/* Strip thumbnail */}
-      {count > 1 && (
-        <div className="absolute bottom-3 left-1/2 flex max-w-full -translate-x-1/2 gap-2 overflow-x-auto rounded-xl border border-white/10 bg-black/50 px-2 py-1.5 backdrop-blur">
+        <div className="absolute right-4 bottom-2 z-20 flex items-center gap-1.5">
           {items.map((s, i) => (
             <button
               key={s.id}
+              type="button"
               onClick={() => setIndex(i)}
-              aria-label={s.title}
-              className={`h-12 w-9 shrink-0 overflow-hidden rounded-md transition sm:h-14 sm:w-11 ${
-                i === index % count ? 'ring-2 ring-primary-500' : 'opacity-60 hover:opacity-100'
+              aria-label={`Go to slide ${i + 1}`}
+              className={`h-2 rounded-full transition-all duration-300 ${
+                i === active ? 'w-6 bg-primary-500 shadow-[0_0_8px_#6f39ee]' : 'w-2 bg-white/40 hover:bg-white/70'
               }`}
-            >
-              <img src={s.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-            </button>
+            />
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+// Carousel pengumuman horizontal: satu kartu per slide, bisa swipe/klik panah.
+function AnnouncementCarousel({ announcements, now }: { announcements: Announcement[]; now: number }) {
+  const [index, setIndex] = useState(0)
+  const count = announcements.length
+
+  if (count === 0) return null
+  const a = announcements[index % count]
+
+  return (
+    <div className="flex items-center gap-2 sm:gap-3">
+      {count > 1 && (
+        <button
+          type="button"
+          onClick={() => setIndex((index - 1 + count) % count)}
+          aria-label="Pengumuman sebelumnya"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-(--line) bg-(--card) text-general-400 shadow-md transition hover:bg-primary-500 hover:text-white sm:h-10 sm:w-10"
+        >
+          <ArrowLeftIcon className="h-5 w-5" />
+        </button>
+      )}
+      <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-(--line) bg-(--card) p-4 shadow-md">
+        <div className="mb-3">
+          <h2 className="font-display text-lg font-bold text-general-100">Pengumuman</h2>
+        </div>
+        <div className="min-h-[5rem] transition-opacity duration-300">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-general-100">{a.title}</h3>
+            <span className="shrink-0 text-[11px] text-general-400">{timeAgo(a.created_at, now)}</span>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-general-400">{a.body}</p>
+        </div>
+        {count > 1 && (
+          <div className="mt-3 flex items-center justify-center gap-1.5">
+            {announcements.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setIndex(i)}
+                aria-label={`Pengumuman ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  i === index % count ? 'w-6 bg-primary-500' : 'w-1.5 bg-general-500 hover:bg-general-400'
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+      {count > 1 && (
+        <button
+          type="button"
+          onClick={() => setIndex((index + 1) % count)}
+          aria-label="Pengumuman berikutnya"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-(--line) bg-(--card) text-general-400 shadow-md transition hover:bg-primary-500 hover:text-white sm:h-10 sm:w-10"
+        >
+          <ArrowRightIcon className="h-5 w-5" />
+        </button>
       )}
     </div>
   )

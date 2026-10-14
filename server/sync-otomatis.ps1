@@ -23,6 +23,7 @@ if (!(Get-Command node -ErrorAction SilentlyContinue)) {
 # Penjaga 1x sehari: kalau hari ini sudah pernah sync sampai selesai, lewati.
 # Jadi jadwal boleh ke-trigger kapan saja (jam 2, jam 7 pas laptop dibuka, dll),
 # yang dikerjakan tetap maksimal 1x per hari.
+
 $stampFile = Join-Path $dir '.sync-last-run'
 $today = Get-Date -Format 'yyyy-MM-dd'
 if ((Test-Path -LiteralPath $stampFile) -and ((Get-Content -LiteralPath $stampFile -TotalCount 1) -eq $today)) {

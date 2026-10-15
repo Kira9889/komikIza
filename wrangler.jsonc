@@ -11,6 +11,13 @@
     "NEXT_PUBLIC_API_URL": "https://izalib-api.onrender.com/api",
     "NEXT_PUBLIC_MAINTENANCE": "false"
   },
+  "previews": {
+    "vars": {
+      "API_SERVER_URL": "https://preview-api.invalid/api",
+      "NEXT_PUBLIC_API_URL": "https://preview-api.invalid/api",
+      "NEXT_PUBLIC_MAINTENANCE": "true"
+    }
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

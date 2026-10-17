@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchMangaList, fetchChapters, saveChapter, deleteChapter } from '../../api/library'
+import { fetchMangaList, fetchChapters, fetchChapterWithPages, saveChapter, deleteChapter } from '../../api/library'
 import type { Manga, Chapter, Screen } from '../../types'
 import { PlusIcon, TrashIcon, EditIcon } from '../../icons'
 import { toDrivePreview, toDriveImage } from '../../lib/drive'
@@ -69,6 +69,24 @@ export default function AdminChapters() {
     setPageUrl('')
     setFormError('')
     setOpen(true)
+  }
+
+  // Edit memuat blob pages untuk SATU chapter saja via ?chapter_id= —
+  // daftar chapter tetap slim, tidak menyeret pages semua chapter.
+  const openEdit = async (ch: Chapter) => {
+    setEditing(ch)
+    setName(ch.name)
+    setPdfUrl(ch.pdf_url ?? '')
+    setPages([])
+    setPageUrl('')
+    setFormError('')
+    setOpen(true)
+    const full = await fetchChapterWithPages(selectedId, ch.id)
+    if (full?.id !== ch.id) return
+    setEditing(ch !== full ? { ...full } : full)
+    setName(full.name)
+    setPdfUrl(full.pdf_url ?? '')
+    setPages(newPages => (newPages.length ? newPages : [...(full.pages ?? [])]))
   }
 
   const addPage = () => {
@@ -171,14 +189,14 @@ export default function AdminChapters() {
                 <tr key={ch.id} className="border-b border-(--line) last:border-0">
                   <td className="px-4 py-3 font-medium text-general-100">{ch.name}</td>
                   <td className="px-4 py-3 text-general-300">
-                    {ch.pdf_url ? 'PDF' : `${ch.pages.length} halaman`}
+                    {ch.pdf_url ? 'PDF' : 'Halaman (buka Edit)'}
                   </td>
                   <td className="px-4 py-3 text-general-400">
                     {new Date(ch.release_timestamp * 1000).toLocaleDateString('id-ID')}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
-                      <button onClick={() => { setEditing(ch); setName(ch.name); setPdfUrl(ch.pdf_url ?? ''); setPages([...ch.pages]); setPageUrl(''); setFormError(''); setOpen(true); }} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 hover:border-primary-500 hover:text-primary-500" aria-label="Edit">
+                      <button onClick={() => { void openEdit(ch) }} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 hover:border-primary-500 hover:text-primary-500" aria-label="Edit">
                         <EditIcon className="h-4 w-4" />
                       </button>
                       <button onClick={() => remove(ch.id)} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-red-400 hover:border-red-500" aria-label="Hapus">

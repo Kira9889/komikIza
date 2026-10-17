@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { fetchChapters, fetchMangaBySlug, fetchReadChapters, fetchShinigamiPages, recordView } from '../api/library'
 import Comments from '../components/manga/Comments'
 import { useLibrary } from '../context/LibraryContext'
 import { useAuth } from '../context/AuthContext'
+import { queryKeys } from '../lib/queryKeys'
 import type { Manga, Chapter } from '../types'
 import { toDriveImage } from '../lib/drive'
 import {
@@ -17,8 +19,21 @@ import {
 
 export default function ReadChapter() {
   const { slug, chapterId } = useParams<{ slug: string; chapterId: string }>()
-  const [manga, setManga] = useState<Manga | null>(null)
-  const [chapters, setChapters] = useState<Chapter[]>([])
+  // Manga + daftar chapter lewat React Query: share cache dengan halaman
+  // MangaDetail mil judul yang sama, jadi pindah chapter tidak mengunduh
+  // ulang manga + daftar chapter + read-chapters berkali-kali.
+  const mangaQuery = useQuery({
+    queryKey: queryKeys.manga(slug ?? ''),
+    queryFn: () => fetchMangaBySlug(slug ?? ''),
+    enabled: !!slug,
+  })
+  const chaptersQuery = useQuery({
+    queryKey: queryKeys.chapters(mangaQuery.data?.id ?? ''),
+    queryFn: () => fetchChapters(mangaQuery.data!.id, { slim: true }),
+    enabled: !!mangaQuery.data,
+  })
+  const manga: Manga | null = mangaQuery.data ?? null
+  const chapters: Chapter[] = chaptersQuery.data ?? []
   const [current, setCurrent] = useState<Chapter | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -68,34 +83,46 @@ export default function ReadChapter() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Muat manga + chapter; reset menu setiap kali slug/chapter berubah
+  // Reset menu + scroll tiap slug/chapter berubah (tanpa unduhan ulang).
   useEffect(() => {
     if (!slug) return
     setMenuOpen(false)
     setReaderControlsOpen(false)
     // Setiap ganti chapter selalu mulai membaca dari halaman paling atas.
     window.scrollTo(0, 0)
-    fetchMangaBySlug(slug).then(async m => {
-      if (!m) return
-      setManga(m)
-      const ch = await fetchChapters(m.id, { slim: true })
-      setChapters(ch)
-      const selected = ch.find(c => c.id === chapterId) ?? null
+  }, [slug, chapterId])
+
+  // Pilih chapter aktif dari cache (tanpa fetch — manga/chapters via React Query).
+  useEffect(() => {
+    setCurrent(chapters.find(c => c.id === chapterId) ?? null)
+  }, [chapters, chapterId])
+
+  // Pages, riwayat, view, read-chapters hanya untuk chapter yang sedang dibaca.
+  const activeOnceRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!manga || !current) return
+    if (activeOnceRef.current === `${manga.id}:${current.id}`) return
+    activeOnceRef.current = `${manga.id}:${current.id}`
+    let cancelled = false
+    ;(async () => {
+      let withPages = current
       // Pages diambil terpisah hanya bila daftar tidak membawanya
       // (mode slim online). Mode offline/mock membawa pages langsung.
-      if (selected && !selected.pdf_url && selected.pages.length === 0) {
-        selected.pages = await fetchShinigamiPages(selected.id)
+      if (!current.pdf_url && current.pages.length === 0) {
+        withPages = { ...current, pages: await fetchShinigamiPages(current.id) }
       }
-      setCurrent(selected)
-      if (selected) {
-        recordHistory({ manga_id: m.id, chapter_id: selected.id, chapter_name: selected.name })
-        recordView(m.id)
-      }
+      if (cancelled) return
+      setCurrent(withPages)
+      recordHistory({ manga_id: manga.id, chapter_id: withPages.id, chapter_name: withPages.name })
+      recordView(manga.id)
       if (user) {
-        fetchReadChapters(m.id).then(ids => mergeReadChapters(m.id, ids))
+        fetchReadChapters(manga.id).then(ids => mergeReadChapters(manga.id, ids))
       }
-    })
-  }, [slug, chapterId])
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [manga?.id, current?.id, user?.id])
 
   if (!manga || !current) {
     return (

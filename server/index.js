@@ -332,6 +332,21 @@ const MANGA_SELECT = `
   from manga m
 `
 
+// Kolom lengkap TANPA description (teks panjang) untuk query daftar/ical;
+// detail endpoint mengambil description terpisah saat diperlukan. Ini memangkas
+// transfer DB -> server untuk katalog 1500+ judul setiap rebuild cache.
+const MANGA_SELECT_LEAN = `
+  select m.id, m.slug, m.title, m.original_name, m.type, m.status, m.cover_url, m.banner_url,
+    m.shinigami_id, m.shinigami_views, m.shinigami_bookmarks, m.shinigami_rating, m.shinigami_rank,
+    m.alternative_names, m.tags, m.views_count, m.follows_count, m.rating, m.rating_count,
+    m.latest_chapter_number, m.latest_chapter_time, m.release_date, m.created_at,
+    coalesce((select json_agg(json_build_object('id', g.id, 'name', g.name) order by g.name)
+              from manga_genres mg join genres g on g.id = mg.genre_id where mg.manga_id = m.id), '[]') as genres,
+    coalesce((select json_agg(json_build_object('id', a.id, 'name', a.name, 'role', a.role) order by a.name)
+              from manga_authors ma join authors a on a.id = ma.author_id where ma.manga_id = m.id), '[]') as authors
+  from manga m
+`
+
 function formatDate(d) {
   if (!d) return ''
   if (d instanceof Date) return d.toISOString().slice(0, 10)
@@ -483,15 +498,41 @@ function shinigamiMangaStatus(value) {
   return 'Ongoing'
 }
 
+// api.shngm.io membatasi 1000 record untuk query katalog tanpa filter,
+// padahal katalog aslinya ~1570-an judul — jadi union slice berfilter
+// (format/genre/project/rank), tiap slice < 1000 record, dedupe by manga_id.
+const SHINIGAMI_GENRES = [
+  'action', 'adventure', 'comedy', 'demon', 'drama', 'ecchi', 'fantasy', 'horror',
+  'isekai', 'magic', 'martial-arts', 'mystery', 'psychological', 'romance',
+  'school-life', 'sci-fi', 'seinen', 'shoujo', 'shounen', 'slice-of-life',
+  'sports', 'supernatural', 'thriller', 'tragedy',
+]
+
+const SHINIGAMI_CATALOG_SLICES = [
+  '&format=manga',
+  '&format=manhua',
+  '&format=manhwa&type=project',
+  '&format=manhwa&sort=rank',
+  ...SHINIGAMI_GENRES.map(genre => `&format=manhwa&genre=${genre}`),
+]
+
 async function getShinigamiCatalog() {
-  const first = await shinigamiJson('/v1/manga/list?page=1&page_size=100&sort=latest')
-  const totalPages = Math.min(Number(first.meta?.total_page || 1), 1000)
-  const catalog = [...(first.data || [])]
-  for (let page = 2; page <= totalPages; page += 1) {
-    const response = await shinigamiJson(`/v1/manga/list?page=${page}&page_size=100&sort=latest`)
-    catalog.push(...(response.data || []))
+  const catalog = new Map()
+  for (const slice of SHINIGAMI_CATALOG_SLICES) {
+    let page = 1
+    for (;;) {
+      const response = await shinigamiJson(`/v1/manga/list?page=${page}&page_size=100${slice}`)
+      for (const item of response.data || []) {
+        if (item?.manga_id && item?.title && !catalog.has(item.manga_id)) catalog.set(item.manga_id, item)
+      }
+      const totalPages = Math.min(Number(response.meta?.total_page || 1), 1000)
+      if (page >= totalPages) break
+      page += 1
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+    await new Promise(resolve => setTimeout(resolve, 200))
   }
-  return catalog.filter(item => item?.manga_id && item?.title)
+  return [...catalog.values()]
 }
 
 function normalizeTitleKey(str) {
@@ -683,15 +724,22 @@ async function getCachedMangaList(force = false) {
   if (!force && mangaCache && now - mangaCacheTime < CACHE_TTL) {
     return mangaCache
   }
-  const rows = await query(`${MANGA_SELECT} order by m.views_count desc limit 3000`)
-  // 3 chapter terbaru tiap judul (kartu daftar + label "x menit lalu" + sorting Update).
-  const latest = await query(
-    `select manga_id, id, name, release_timestamp from (
-       select manga_id, id, name, release_timestamp,
-              row_number() over (partition by manga_id order by release_timestamp desc) as rn
-       from chapters
-     ) t where rn <= 3`,
-  )
+  const rows = await query(`${MANGA_SELECT_LEAN} order by m.views_count desc limit 3000`)
+  // 3 chapter terbaru tiap judul — dibatasi hanya untuk judul yang masuk cache
+  // (sebelumnya window function memindai tabel chapters utuh + mengirim 3 baris
+  //  untuk SEMUA manga di DB setiap 3 menit).
+  let latest = []
+  if (rows.length) {
+    const ids = rows.map(r => r.id)
+    latest = await query(
+      `select manga_id, id, name, release_timestamp from (
+         select manga_id, id, name, release_timestamp,
+                row_number() over (partition by manga_id order by release_timestamp desc) as rn
+         from chapters where manga_id = any($1::uuid[])
+       ) t where rn <= 3`,
+      [ids],
+    )
+  }
   const latestByManga = new Map()
   for (const r of latest) {
     if (!latestByManga.has(r.manga_id)) latestByManga.set(r.manga_id, [])
@@ -816,7 +864,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data pendaftaran tidak valid' })
     const { email: mail, username, password } = parsed.data
 
-    const existing = (await query('select * from members where email = $1', [mail]))[0]
+    const existing = (await query('select id, email, username, role, email_verified, avatar_url, password_hash, google_sub from members where email = $1', [mail]))[0]
     if (existing && existing.email_verified) {
       return res.status(400).json({ error: 'Email sudah terdaftar. Silakan masuk.' })
     }
@@ -860,7 +908,7 @@ app.post('/api/auth/verify-email', codeLimiter, async (req, res) => {
     const { email, code } = req.body || {}
     if (!email || !code) return res.status(400).json({ error: 'Email dan kode wajib diisi' })
     const mail = String(email).toLowerCase().trim()
-    const row = (await query('select * from email_verification_codes where email = $1', [mail]))[0]
+    const row = (await query('select email, expires_at, attempts, code_hash, created_at from email_verification_codes where email = $1', [mail]))[0]
     if (!row) return res.status(400).json({ error: 'Kode tidak ditemukan. Minta kode baru.', needsCode: true })
     if (new Date(row.expires_at).getTime() < Date.now()) {
       await query('delete from email_verification_codes where email = $1', [mail])
@@ -897,10 +945,10 @@ app.post('/api/auth/resend-code', codeLimiter, async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email wajib diisi' })
     const mail = String(email).toLowerCase().trim()
     if (!isGmail(mail)) return res.status(400).json({ error: 'Pendaftaran hanya untuk email @gmail.com' })
-    const member = (await query('select * from members where email = $1', [mail]))[0]
+    const member = (await query('select id, email, username, role, email_verified, avatar_url, password_hash, google_sub from members where email = $1', [mail]))[0]
     if (!member) return res.status(404).json({ error: 'Email belum terdaftar. Daftar dulu.' })
     if (member.email_verified) return res.status(400).json({ error: 'Email sudah terverifikasi. Silakan masuk.' })
-    const last = (await query('select * from email_verification_codes where email = $1', [mail]))[0]
+    const last = (await query('select email, expires_at, attempts, code_hash, created_at from email_verification_codes where email = $1', [mail]))[0]
     if (last) {
       const waitMs = new Date(last.created_at).getTime() + RESEND_COOLDOWN_MS - Date.now()
       if (waitMs > 0) {
@@ -922,7 +970,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const parsed = loginSchema.safeParse(req.body)
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Data login tidak valid' })
     const { email, password } = parsed.data
-    const rows = await query('select * from members where email = $1', [email])
+    const rows = await query('select id, email, username, role, email_verified, avatar_url, password_hash, google_sub from members where email = $1', [email])
     const row = rows[0]
     if (!row) return res.status(401).json({ error: 'Email atau password salah' })
     if (!row.password_hash) {
@@ -973,9 +1021,9 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
     const sub = String(payload.sub || '')
     if (!sub) return res.status(401).json({ error: 'Akun Google tidak valid.' })
 
-    let row = (await query('select * from members where google_sub = $1', [sub]))[0]
+    let row = (await query('select id, email, username, role, email_verified, avatar_url, password_hash, google_sub from members where google_sub = $1', [sub]))[0]
     if (!row) {
-      const byEmail = (await query('select * from members where email = $1', [mail]))[0]
+      const byEmail = (await query('select id, email, username, role, email_verified, avatar_url, password_hash, google_sub from members where email = $1', [mail]))[0]
       if (byEmail) {
         // Tautkan akun lama (daftar via password) ke Google.
         row = (await query(
@@ -1259,7 +1307,15 @@ app.get('/api/manga/:slug', async (req, res) => {
   try {
     if (mangaCache) {
       const found = mangaCache.find(m => m.slug === req.params.slug)
-      if (found) return res.json(found)
+      if (found) {
+        // Cache baris lean (tanpa description) — ambil description kecil
+        // terpisah supaya detail tetap lengkap tanpa membesarkan cache.
+        let description = ''
+        if (!found.description) {
+          description = ((await query('select description from manga where id = $1', [found.id]))[0]?.description) || ''
+        }
+        return res.json({ ...found, description })
+      }
     }
     const rows = await query(`${MANGA_SELECT} where m.slug = $1 limit 1`, [req.params.slug])
     if (!rows[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
@@ -1453,6 +1509,22 @@ app.get('/api/manga/:mangaId/chapters', async (req, res) => {
     if (!isValidUuid(mangaId)) return res.status(400).json({ error: 'ID tidak valid' })
     const source = await query('select shinigami_id from manga where id = $1', [mangaId])
     if (!source[0]) return res.status(404).json({ error: 'Judul tidak ditemukan' })
+    // Admin butuh blob satu chapter? Layani dulu dari baris lokal
+    // (tanpa menunggu fetch ke sumber) via ?chapter_id=<id>.
+    const chapterId = req.query.chapter_id
+    if (chapterId && isValidUuid(chapterId)) {
+      const one = await query(
+        'select id, manga_id, name, type, sort_order, release_timestamp, pages, pdf_url from chapters where manga_id = $1 and id = $2 limit 1',
+        [mangaId, chapterId],
+      )
+      return res.json(
+        one.map(r => ({
+          ...r,
+          pdf_url: r.pdf_url || undefined,
+          ...(source[0].shinigami_id ? { source: 'shinigami' } : {}),
+        })),
+      )
+    }
     // Live-first: coba ambil dari sumber. Kalau gagal (mis. IP server
     // diblokir sumber) jatuh ke baris lokal hasil sync agar tidak 500.
     if (source[0].shinigami_id) {
@@ -1465,10 +1537,10 @@ app.get('/api/manga/:mangaId/chapters', async (req, res) => {
         console.error(liveError)
       }
     }
-    // ?slim=1: daftar tanpa blob pages (jauh lebih ringan untuk judul
-    // dengan ratusan chapter). Reader/admin yang butuh pages memintanya
-    // terpisah via endpoint pages.
-    const slim = req.query.slim === '1'
+    // Daftar default slim (tanpa blob pages) supaya judul dengan ratusan
+    // chapter tidak menyeret seluruh arrays halaman setiap panggilan.
+    // Reader memuat pages terpisah lewat endpoint pages.
+    const slim = req.query.include_pages !== '1'
     const rows = await query(
       slim
         ? 'select id, manga_id, name, type, sort_order, release_timestamp, pdf_url from chapters where manga_id = $1 order by sort_order asc'
@@ -1579,7 +1651,7 @@ app.get('/api/me/history', requireAuth, async (req, res) => {
       `select h.manga_id, h.chapter_id, h.chapter_name, h.updated_at,
               m.slug, m.title, m.cover_url
        from history h join manga m on m.id = h.manga_id
-       where h.user_id = $1 order by h.updated_at desc`,
+       where h.user_id = $1 order by h.updated_at desc limit 200`,
       [req.user.id],
     )
     res.json(rows)

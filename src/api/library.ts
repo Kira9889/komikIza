@@ -1,4 +1,5 @@
 import { apiFetch, isBackendOnline } from '../lib/api'
+import { compressImageToWebp } from '../lib/imageCompress'
 import {
   storeManga,
   storeGenres as mockStoreGenres,
@@ -33,6 +34,9 @@ export async function fetchMangaList(params?: {
   search?: string
   genre?: string
   order?: string
+  // Pagination server-side: kirim limit supaya payload list tetap kecil
+  // (NavbarSearch hanya butuh beberapa baris, bukan seluruh katalog).
+  limit?: number
 }): Promise<Manga[]> {
   if (!(await isBackendOnline())) {
     await delay(250)
@@ -43,6 +47,7 @@ export async function fetchMangaList(params?: {
   if (params?.search) query.search = params.search
   if (params?.genre) query.genre = params.genre
   if (params?.order) query.order = params.order
+  if (params?.limit) query.limit = String(params.limit)
   // Cache baca 2 menit: gonta-ganti filter/genre tidak mengunduh ulang
   // 1000 judul berkali-kali.
   const key = JSON.stringify(query)
@@ -81,13 +86,30 @@ export async function fetchChapters(mangaId: string, opts?: { slim?: boolean }):
     await delay(200)
     return getChaptersCached(mangaId)
   }
+  // Daftar default slim (tanpa blob pages) — hanya admin yang butuh blob
+  // detail memintanya lewat fetchChapterWithPages 1 chapter sekaligus.
+  if (opts?.slim === false) {
+    return apiFetch<Chapter[]>(`/manga/${mangaId}/chapters`, { query: { include_pages: '1' } })
+  }
   try {
-    return await apiFetch<Chapter[]>(`/manga/${mangaId}/chapters`, {
-      query: opts?.slim ? { slim: '1' } : undefined,
-    })
+    return await apiFetch<Chapter[]>(`/manga/${mangaId}/chapters`, { query: { slim: '1' } })
   } catch (e) {
     console.error(e)
     return getChaptersCached(mangaId)
+  }
+}
+
+// Blob pages SATU chapter (untuk form edit admin) — server kirim via
+// ?chapter_id= tanpa usah menyeret pages seluruh daftar.
+export async function fetchChapterWithPages(mangaId: string, chapterId: string): Promise<Chapter | undefined> {
+  try {
+    const rows = await apiFetch<Chapter[]>(`/manga/${mangaId}/chapters`, {
+      query: { chapter_id: chapterId },
+    })
+    return Array.isArray(rows) ? rows[0] : undefined
+  } catch (e) {
+    console.error(e)
+    return undefined
   }
 }
 
@@ -274,8 +296,10 @@ export async function uploadCommentImage(file: File): Promise<string> {
   if (!/^(image\/jpeg|image\/png|image\/webp|image\/gif)$/.test(file.type)) {
     throw new Error('Format harus JPG, PNG, WebP, atau GIF')
   }
+  // Kompres → WebP <= 200KB dulu supaya egress storage tidak terkuras.
+  const compressed = await compressImageToWebp(file, { maxKB: 200, keepGif: true })
   const fd = new FormData()
-  fd.append('image', file)
+  fd.append('image', compressed)
   const res = await apiFetch<{ url: string }>('/me/comment-image', { method: 'POST', body: fd })
   return res.url
 }

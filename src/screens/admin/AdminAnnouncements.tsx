@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchAnnouncements, saveAnnouncement, deleteAnnouncement } from '../../api/library'
 import type { Announcement } from '../../types'
 import { queryKeys } from '../../lib/queryKeys'
@@ -8,7 +8,6 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 export default function AdminAnnouncements() {
   const queryClient = useQueryClient()
-  const [items, setItems] = useState<Announcement[]>([])
   const [editing, setEditing] = useState<Announcement | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -16,16 +15,17 @@ export default function AdminAnnouncements() {
   const [imageUrl, setImageUrl] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Share cache dengan sidebar Home / halaman daftar pengumuman.
+  const itemsQuery = useQuery({
+    queryKey: queryKeys.announcements,
+    queryFn: async () => (await fetchAnnouncements()) ?? [],
+  })
+  const items = itemsQuery.data ?? []
 
+  // Segarkan cache Home/daftar agar pengumuman terbaru langsung terlihat.
   const reload = () => {
-    fetchAnnouncements().then(list => setItems(list ?? [])).catch(() => {})
-    // Segarkan cache Home/daftar agar pengumuman terbaru langsung terlihat.
     void queryClient.invalidateQueries({ queryKey: queryKeys.announcements })
   }
-
-  useEffect(() => {
-    reload()
-  }, [])
 
   const openCreate = () => {
     setEditing(null)

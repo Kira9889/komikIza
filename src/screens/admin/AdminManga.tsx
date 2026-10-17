@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { fetchMangaList, saveManga, removeManga, importShinigamiCatalog, listGenres } from '../../api/library'
+import { fetchMangaList, fetchMangaBySlug, saveManga, removeManga, importShinigamiCatalog, listGenres } from '../../api/library'
 import type { Manga, MangaInput, MangaType, MangaStatus, Genre } from '../../types'
 import { PlusIcon, EditIcon, TrashIcon } from '../../icons'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
@@ -84,7 +84,9 @@ export default function AdminManga() {
     setOpen(true)
   }
 
-  const openEdit = (m: Manga) => {
+  // Daftar kini lean (tanpa description biar payload list kering).
+  // Detail lone description diambil saat form edit dibuka.
+  const openEdit = async (m: Manga) => {
     setEditing(m)
     setForm({
       title: m.title,
@@ -92,7 +94,7 @@ export default function AdminManga() {
       original_name: m.original_name ?? '',
       type: m.type,
       status: m.status,
-      description: m.description,
+      description: m.description ?? '',
       cover_url: m.cover_url,
       banner_url: m.banner_url ?? '',
       shinigami_id: m.shinigami_id ?? '',
@@ -103,6 +105,10 @@ export default function AdminManga() {
       authorNames: m.authors.map(a => a.name),
     })
     setOpen(true)
+    const full = await fetchMangaBySlug(m.slug)
+    if (!full || full.slug !== m.slug) return
+    setEditing(full)
+    setForm(prev => ({ ...prev, description: full.description }))
   }
 
   const save = async (e: React.FormEvent) => {
@@ -245,7 +251,7 @@ export default function AdminManga() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => openEdit(m)} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 transition hover:border-primary-500 hover:text-primary-500" aria-label="Edit">
+                        <button onClick={() => { void openEdit(m) }} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-general-300 transition hover:border-primary-500 hover:text-primary-500" aria-label="Edit">
                           <EditIcon className="h-4 w-4" />
                         </button>
                         <button onClick={() => setPendingDelete(m)} className="grid h-8 w-8 place-items-center rounded-md border border-(--line) text-red-400 transition hover:border-red-500" aria-label="Hapus">

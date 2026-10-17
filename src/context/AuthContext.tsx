@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { apiFetch, setToken, isBackendOnline, isServerDownError } from '../lib/api'
+import { compressImageToWebp } from '../lib/imageCompress'
 import type { User } from '../types'
 import { loginSchema, registerSchema } from '../../server/validation.js'
 
@@ -269,8 +270,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: 'Format harus JPG, PNG, WebP, atau GIF' }
     }
     try {
+      // Kompres → WebP <= 200KB sebelum dikirim (GIF dibiarkan agar tetap
+      // beranimasi; sudah kecil pun diteruskan apa adanya).
+      const compressed = await compressImageToWebp(file, { maxKB: 200, maxWidth: 512, keepGif: true })
       const fd = new FormData()
-      fd.append('avatar', file)
+      fd.append('avatar', compressed)
       const res = await apiFetch<{ user: User }>('/me/avatar', { method: 'POST', body: fd })
       persist(res.user)
       return {}

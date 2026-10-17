@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { fetchComments, postComment, deleteComment, uploadCommentImage, searchGifs } from '../../api/library'
 import type { Comment, GifItem } from '../../types'
 import { useAuth } from '../../context/AuthContext'
@@ -54,8 +55,18 @@ function renderBody(body: string): string {
 
 export default function Comments({ mangaId, chapterId }: { mangaId: string; chapterId?: string }) {
   const { user } = useAuth()
-  const [items, setItems] = useState<Comment[]>([])
-  const [loading, setLoading] = useState(true)
+  // Data komentar via React Query: berbagi cache antara halaman Detail dan
+  // Baca, tidak mengunduh ulang saat navigasi balik / pindah tab.
+  const commentsQuery = useQuery({
+    queryKey: ['comments', mangaId, chapterId ?? ''],
+    queryFn: () => fetchComments(mangaId, chapterId),
+    placeholderData: keepPreviousData,
+  })
+  const loading = commentsQuery.isPending
+  // Komentar yang baru dikirim/dihapus dipelihara lokal sampai data server
+  // berikutnya — tidak perlu refetch penuh setiap tulis komentar.
+  const [added, setAdded] = useState<Comment[]>([])
+  const [removed, setRemoved] = useState<Set<string>>(new Set())
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
   const [uploadingImg, setUploadingImg] = useState(false)
@@ -73,16 +84,22 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
   const taRef = useRef<HTMLTextAreaElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
 
+  // Ganti ruang (judul/chapter) → bersihkan input dan override lokal.
   useEffect(() => {
-    setLoading(true)
     setBody('')
     setError('')
     setReplyTo(null)
-    fetchComments(mangaId, chapterId)
-      .then(setItems)
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    setAdded([])
+    setRemoved(new Set())
   }, [mangaId, chapterId])
+
+  const items = useMemo(() => {
+    const base = commentsQuery.data ?? []
+    const known = new Set(base.map(c => c.id))
+    const locals = added.filter(c => !known.has(c.id) && !removed.has(c.id) && !(c.parent_id && removed.has(c.parent_id)))
+    const kept = base.filter(c => !removed.has(c.id) && !(c.parent_id && removed.has(c.parent_id)))
+    return [...locals, ...kept]
+  }, [commentsQuery.data, added, removed])
 
   const tops = useMemo(() => items.filter(c => !c.parent_id), [items])
   const kids = useMemo(() => {
@@ -117,7 +134,7 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
     setError('')
     try {
       const c = await postComment(mangaId, text, chapterId, replyTo?.id)
-      setItems(prev => [c, ...prev])
+      setAdded(prev => [c, ...prev])
       setBody('')
       setReplyTo(null)
     } catch (e: any) {
@@ -170,7 +187,7 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
     setDeleting(true)
     try {
       await deleteComment(id)
-      setItems(prev => prev.filter(c => c.id !== id && c.parent_id !== id))
+      setRemoved(prev => new Set(prev).add(id))
       setPendingDelete(null)
     } catch (e: any) {
       setError(e?.message || 'Gagal menghapus komentar')

@@ -170,38 +170,39 @@ function HeroCarousel({ items }: { items: HeroSlide[] }) {
       className="relative mb-8 overflow-hidden rounded-2xl bg-gray-900 shadow-2xl"
     >
       <div className="relative aspect-video max-h-105 min-h-50 w-full overflow-hidden sm:aspect-21/9 md:aspect-24/9">
-        {items.map((item, i) => (
-          <div
-            key={item.key}
-            aria-hidden={i !== active}
-            className={`absolute inset-0 transition-opacity duration-500 ease-in-out ${i === active ? 'opacity-100' : 'opacity-0'}`}
-          >
-            {!loaded[item.key] && (
-              <div className="absolute inset-0 flex min-h-50 animate-pulse items-center justify-center bg-gray-800">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-700 border-t-primary-500" />
-              </div>
-            )}
-            {item.mediaType === 'video' ? (
-              <video
-                src={item.image}
-                autoPlay
-                muted
-                loop
-                playsInline
-                onLoadedData={() => setLoaded(p => ({ ...p, [item.key]: true }))}
-                className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[item.key] ? 'opacity-100' : 'opacity-0'}`}
-              />
-            ) : (
-              <img
-                src={item.image}
-                alt={item.title}
-                loading={i === 0 ? 'eager' : 'lazy'}
-                onLoad={() => setLoaded(p => ({ ...p, [item.key]: true }))}
-                className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[item.key] ? 'opacity-100' : 'opacity-0'}`}
-              />
-            )}
-          </div>
-        ))}
+        {/* Hanya slide yang aktif dimount: video banner yang tidak aktif
+            tidak lagi diunduh/autoplay secara paralel (hemat egress besar). */}
+        <div
+          key={s.key}
+          aria-hidden={false}
+          className="absolute inset-0 transition-opacity duration-500 ease-in-out"
+        >
+          {!loaded[s.key] && (
+            <div className="absolute inset-0 flex min-h-50 animate-pulse items-center justify-center bg-gray-800">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-700 border-t-primary-500" />
+            </div>
+          )}
+          {s.mediaType === 'video' ? (
+            <video
+              src={s.image}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="none"
+              onLoadedData={() => setLoaded(p => ({ ...p, [s.key]: true }))}
+              className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[s.key] ? 'opacity-100' : 'opacity-0'}`}
+            />
+          ) : (
+            <img
+              src={s.image}
+              alt={s.title}
+              loading={active === 0 ? 'eager' : 'lazy'}
+              onLoad={() => setLoaded(p => ({ ...p, [s.key]: true }))}
+              className={`h-full w-full object-cover object-center transition-all duration-700 ease-out hover:scale-105 ${loaded[s.key] ? 'opacity-100' : 'opacity-0'}`}
+            />
+          )}
+        </div>
 
         <div className="pointer-events-none absolute inset-0 bg-linear-to-r from-gray-950/70 via-gray-950/20 to-transparent" />
 

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { seedManga } from '../data/seed'
 import { fetchMangaList } from '../api/library'
-import { isBackendOnline } from '../lib/api'
+import { queryKeys } from '../lib/queryKeys'
 import { useLibrary } from '../context/LibraryContext'
 import { useAuth } from '../context/AuthContext'
 import type { Manga } from '../types'
@@ -16,30 +17,12 @@ export default function Library() {
   const [tab, setTab] = useState<'bookmark' | 'history'>('bookmark')
   const [showAuth, setShowAuth] = useState(false)
   const [chibiOk, setChibiOk] = useState(true)
-  const [mangas, setMangas] = useState<Manga[]>(() => seedManga)
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const online = await isBackendOnline()
-      // saat backend online, ambil data manga sungguhan dari database.
-      // try/catch: backend bisa mati di tengah jalan (502) — jatuh ke seed,
-      // JANGAN lempar error ke user.
-      if (online) {
-        try {
-          const list = await fetchMangaList()
-          if (!cancelled) setMangas(list)
-          return
-        } catch {
-          /* backend mati mendadak → pakai seed di bawah */
-        }
-      }
-      if (!cancelled) setMangas(seedManga)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // Share cache 'manga-list' dengan Explore/Search/Navbar: kunjung pertama
+  // unduh katalog sekali, kunjung berikutnya instan tanpa refetch.
+  const mangaQuery = useQuery({ queryKey: queryKeys.mangaList, queryFn: () => fetchMangaList() })
+  // Backend offline/gagal → data server kosong, tampilkan seed sebagai fallback.
+  const mangas: Manga[] = mangaQuery.data?.length ? mangaQuery.data : seedManga
 
   // Tamu belum login: gerbang chibi + tombol masuk (popup).
   if (!user) {

@@ -19,10 +19,13 @@ export default function NavbarSearch({
   const [results, setResults] = useState<Manga[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
+  const latestRequest = useRef(0)
   const boxRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  // Debounce 300ms: tiap ketik (termasuk 1 huruf) cari ke backend.
+  // Debounce 300ms + limit server-side 12: hanya 12 judul yang dikirim,
+  // bukan seluruh katalog per tombol. requestId membuang hasil balasan
+  // ketuk yang sudah kedaluwarsa (race).
   useEffect(() => {
     const query = q.trim()
     if (!query) {
@@ -31,14 +34,17 @@ export default function NavbarSearch({
       return
     }
     setLoading(true)
+    const requestId = ++latestRequest.current
     const t = setTimeout(async () => {
       try {
-        const data = await fetchMangaList({ search: query })
+        const data = await fetchMangaList({ search: query, limit: 12 })
+        if (latestRequest.current !== requestId) return
         setResults(data.slice(0, 6))
       } catch {
+        if (latestRequest.current !== requestId) return
         setResults([])
       } finally {
-        setLoading(false)
+        if (latestRequest.current === requestId) setLoading(false)
       }
     }, 300)
     return () => clearTimeout(t)

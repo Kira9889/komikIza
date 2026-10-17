@@ -185,17 +185,55 @@ function catalogType(item) {
   return 'manhwa'
 }
 
-async function importCatalog() {
-  const first = await shinigamiJson('/v1/manga/list?page=1&page_size=100&sort=latest')
-  const totalPages = Math.min(Number(first.meta?.total_page || 1), 1000)
-  const catalog = [...(first.data || [])]
-  for (let page = 2; page <= totalPages; page += 1) {
-    const res = await shinigamiJson(`/v1/manga/list?page=${page}&page_size=100&sort=latest`)
-    catalog.push(...(res.data || []))
-    if (page % 10 === 0) console.log(`  katalog hal ${page}/${totalPages}...`)
+// api.shngm.io membatasi 1000 record untuk query katalog tanpa filter,
+// padahal katalog aslinya ~1570-an judul (sort=latest & sort=rank sama-sama dicap),
+// jadi pintu masuk tunggal sort=latest menyisihkan ~570 judul lama/tenggelam.
+// Solusi: union slice berfilter (format/genre/project/rank), tiap slice < 1000
+// record sehingga seluruh katalog terangkum, lalu dedupe by manga_id.
+const SHINIGAMI_GENRES = [
+  'action', 'adventure', 'comedy', 'demon', 'drama', 'ecchi', 'fantasy', 'horror',
+  'isekai', 'magic', 'martial-arts', 'mystery', 'psychological', 'romance',
+  'school-life', 'sci-fi', 'seinen', 'shoujo', 'shounen', 'slice-of-life',
+  'sports', 'supernatural', 'thriller', 'tragedy',
+]
+
+const SHINIGAMI_CATALOG_SLICES = [
+  '&format=manga',
+  '&format=manhua',
+  '&format=manhwa&type=project',
+  '&format=manhwa&sort=rank',
+  ...SHINIGAMI_GENRES.map(g => `&format=manhwa&genre=${g}`),
+]
+
+async function fetchCatalogSlice(slice) {
+  let page = 1
+  const items = []
+  for (;;) {
+    const res = await shinigamiJson(`/v1/manga/list?page=${page}&page_size=100${slice}`)
+    items.push(...(res.data || []))
+    const totalPages = Math.min(Number(res.meta?.total_page || 1), 1000)
+    if (page >= totalPages) break
+    page += 1
     await delay(200)
   }
-  const items = catalog.filter(i => i?.manga_id && i?.title)
+  return items
+}
+
+async function fetchCatalogUnion() {
+  const catalog = new Map()
+  for (const [index, slice] of SHINIGAMI_CATALOG_SLICES.entries()) {
+    const items = await fetchCatalogSlice(slice)
+    for (const item of items) {
+      if (item?.manga_id && item?.title && !catalog.has(item.manga_id)) catalog.set(item.manga_id, item)
+    }
+    console.log(`  slice ${index + 1}/${SHINIGAMI_CATALOG_SLICES.length} (${slice.slice(1)}) => unik ${catalog.size}`)
+    await delay(200)
+  }
+  return [...catalog.values()]
+}
+
+async function importCatalog() {
+  const items = await fetchCatalogUnion()
   console.log(`Katalog: ${items.length} judul`)
 
   const existing = await query('select id, title, shinigami_id from manga')
@@ -312,19 +350,26 @@ async function main() {
       const chapters = mapChapters(m.id, payload).filter(c => isValidUuid(c.id))
       // Cegah duplikat nama: baris lama yang kosong/placeholder diganti,
       // yang sudah ada isinya dilewati (kecuali --refresh-pages).
-      const existingRows = await query(`select name, pages from chapters where manga_id = $1`, [m.id])
+      // Kondisi "pages asli" dievaluasi di sisi SQL supaya blob JSONB halaman
+      // tidak ikut ditransfer DB -> skrip tiap judul yang di-sync.
+      const existingRows = await query(
+        `select name,
+                coalesce(jsonb_array_length(pages), 0) as page_count,
+                coalesce(pages::text like '%placehold.co%', false) as is_placeholder
+         from chapters where manga_id = $1`,
+        [m.id],
+      )
       const byName = new Map()
       for (const r of existingRows) {
         if (!byName.has(r.name)) byName.set(r.name, [])
         byName.get(r.name).push(r)
       }
-      const isReal = pages =>
-        Array.isArray(pages) && pages.length > 0 && !JSON.stringify(pages).includes('placehold.co')
+      const isReal = row => row.page_count > 0 && !row.is_placeholder
       const fresh = []
       let skipped = 0
       for (const c of chapters) {
         const olds = byName.get(c.name) || []
-        if (!args['refresh-pages'] && olds.some(r => isReal(r.pages))) {
+        if (!args['refresh-pages'] && olds.some(isReal)) {
           skipped += 1
           continue
         }

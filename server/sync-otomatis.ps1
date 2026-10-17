@@ -43,19 +43,19 @@ $wantFull = $args -contains '-Full'
     Write-Output (& $stamp "Impor katalog exit=$LASTEXITCODE (lanjut chapter)")
   }
   # Judul baru hasil impor langsung diisi chapter malam itu juga
-  # (tidak nunggu giliran rotasi 5 harian).
+  # (tidak nunggu giliran rotasi 8 harian).
   Write-Output (& $stamp 'Chapter judul baru (--new)')
   node sync-shinigami.mjs --new --workers=3 --jobs=1
   if ($LASTEXITCODE -ne 0) {
     Write-Output (& $stamp "Chapter baru exit=$LASTEXITCODE (lanjut rotasi)")
   }
-  # Bagi beban: tiap malam cuma 200 judul, rotasi per tanggal (full 1000
-  # kelar dalam 5 malam). Parameter -Full untuk sapu semua sekaligus.
+  # Bagi beban: tiap malam cuma 200 judul, rotasi per tanggal (full 1600
+  # kelar dalam 8 malam). Parameter -Full untuk sapu semua sekaligus.
   # Contoh manual penuh: .\sync-otomatis.ps1 -Full
   if ($wantFull) {
-    $ranges = @(0, 100, 200, 300, 400, 500, 600, 700, 800, 900)
+    $ranges = @(0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500)
   } else {
-    $dayIdx = ((Get-Date).DayOfYear % 5)
+    $dayIdx = ((Get-Date).DayOfYear % 8)
     $ranges = @(($dayIdx * 200), ($dayIdx * 200) + 100)
     Write-Output (& $stamp "Jatah malam ini: offset $($ranges[0])-${($ranges[1])} (rotasi harian, -Full untuk semua)")
   }

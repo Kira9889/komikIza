@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchBanners, saveBanner, deleteBanner, fetchMangaList } from '../../api/library'
-import type { Banner, BannerInput, Manga } from '../../types'
+import type { Banner, BannerInput } from '../../types'
 import { queryKeys } from '../../lib/queryKeys'
 import { PlusIcon, TrashIcon, EditIcon } from '../../icons'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
@@ -16,8 +16,8 @@ const emptyForm: BannerInput = {
 
 export default function AdminBanners() {
   const queryClient = useQueryClient()
-  const [items, setItems] = useState<Banner[]>([])
-  const [mangas, setMangas] = useState<Manga[]>([])
+  // Data banner via React Query — share cache dengan Home (queryKeys.banners),
+  // jadi mount admin tidak mengunduh banner dua kali (manual + invalidate).
   const [editing, setEditing] = useState<Banner | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [form, setForm] = useState<BannerInput>(emptyForm)
@@ -25,19 +25,17 @@ export default function AdminBanners() {
   const [mangaOpen, setMangaOpen] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-
-  const reload = () => {
-    fetchBanners().then(list => setItems(list ?? [])).catch(() => {})
-    // Segarkan cache Home agar banner yang baru ditambah/dihapus langsung terlihat.
-    void queryClient.invalidateQueries({ queryKey: queryKeys.banners })
-  }
-
-  useEffect(() => {
-    reload()
-    fetchMangaList().then(setMangas).catch(() => {})
-  }, [])
+  const itemsQuery = useQuery({ queryKey: queryKeys.banners, queryFn: async () => (await fetchBanners()) ?? [] })
+  const mangaQuery = useQuery({ queryKey: queryKeys.mangaList, queryFn: () => fetchMangaList() })
+  const items = itemsQuery.data ?? []
+  const mangas = mangaQuery.data ?? []
 
   const set = (patch: Partial<BannerInput>) => setForm(f => ({ ...f, ...patch }))
+
+  // Segarkan cache agar banner baru/dihapus langsung terlihat di Home & admin.
+  const reload = () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.banners })
+  }
 
   const openCreate = () => {
     setEditing(null)

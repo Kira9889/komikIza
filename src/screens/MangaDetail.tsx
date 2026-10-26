@@ -44,7 +44,9 @@ export default function MangaDetail() {
   })
   const chapters = chaptersQuery.data ?? []
   const chaptersLoading = !!manga && chaptersQuery.isPending
-  const chaptersError = chaptersRetryError
+  const chaptersError =
+    chaptersRetryError ||
+    (chaptersQuery.isError ? 'Gagal memuat daftar chapter. Server mungkin sedang aktif kembali dari mode tidur.' : '')
   const [now, setNow] = useState(0)
 
   useEffect(() => {
@@ -79,6 +81,20 @@ export default function MangaDetail() {
   }, [chaptersLoading])
 
   if (loading) return <DetailSkeleton />
+
+  if (mangaQuery.isError) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-24 text-center">
+        <p className="text-sm text-red-300">Gagal memuat detail judul. Server tidak merespons.</p>
+        <button
+          onClick={() => void mangaQuery.refetch()}
+          className="mt-3 rounded-lg bg-primary-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
+        >
+          Coba lagi
+        </button>
+      </div>
+    )
+  }
 
   if (!manga) {
     return (

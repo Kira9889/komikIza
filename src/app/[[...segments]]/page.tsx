@@ -14,7 +14,15 @@ type RouteProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
-const getManga = cache((slug: string) => fetchMangaBySlug(slug))
+// Jangan biarkan kegagalan sesaat backend mematahkan seluruh render SSR.
+const getManga = cache(async (slug: string) => {
+  try {
+    return await fetchMangaBySlug(slug)
+  } catch (e) {
+    console.error(e)
+    return null
+  }
+})
 
 export async function generateMetadata({ params, searchParams }: RouteProps): Promise<Metadata> {
   const [{ segments = [] }, query] = await Promise.all([params, searchParams])
@@ -72,10 +80,24 @@ export default async function AppRoute({ params, searchParams }: RouteProps) {
     ])
   } else if (route.startsWith('/manga/')) {
     const slug = segments[1]
+    // Halaman baca chapter jangan menunggu daftar chapter dari sumber live:
+    // upstream yang lambat bikin SSR menggantung dan sebagian user tidak
+    // pernah melihat halamannya. Reader memuat daftar itu sendiri sambil
+    // menampilkan status loading/retry.
+    const isReader = segments[2] === 'chapter'
     if (slug) {
-      const manga = await queryClient.fetchQuery({ queryKey: queryKeys.manga(slug), queryFn: () => getManga(slug) })
+      const manga = await getManga(slug)
+      // Hanya masukkan data yang benar-benar berhasil ke cache. Data fallback
+      // kosong/null akan dianggap fresh 5 menit oleh React Query dan membuat
+      // halaman reader macet di "Memuat chapter…".
       if (manga) {
-        await queryClient.prefetchQuery({ queryKey: queryKeys.chapters(manga.id), queryFn: () => fetchChapters(manga.id, { slim: true }) })
+        queryClient.setQueryData(queryKeys.manga(slug), manga)
+        if (!isReader) {
+          await queryClient.prefetchQuery({
+            queryKey: queryKeys.chapters(manga.id),
+            queryFn: () => fetchChapters(manga.id, { slim: true }),
+          })
+        }
       }
     }
   }

@@ -31,7 +31,9 @@ export default function AdminChapters() {
 
   useEffect(() => {
     if (!selectedId) return
-    fetchChapters(selectedId).then(setChapters)
+    fetchChapters(selectedId)
+      .then(setChapters)
+      .catch(() => setChapters([]))
   }, [selectedId])
 
   const selectManga = (id: string) => {

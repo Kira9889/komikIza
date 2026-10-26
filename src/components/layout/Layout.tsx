@@ -116,7 +116,7 @@ export default function Layout() {
   // di halaman baca chapter agar tidak menutupi tombol prev/next.
   const isReader = /\/manga\/.+\/chapter\//.test(pathname)
   return (
-    <div className={`flex min-h-screen flex-col ${isReader ? '' : 'pb-16 lg:pb-0'}`}>
+    <div className={`flex min-h-screen flex-col ${isReader ? '' : 'pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0'}`}>
       {!isReader && <Navbar />}
       <main className="flex-1">
         <Outlet />

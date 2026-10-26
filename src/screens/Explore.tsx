@@ -77,14 +77,19 @@ export default function Explore() {
     document.title = 'Jelajahi Komik — Tenshi.My.id'
   }, [])
 
-  const filtered = [...all].sort((a, b) => {
-    if (sort === 'latest') return (b.latest_chapter?.release_timestamp ?? 0) - (a.latest_chapter?.release_timestamp ?? 0)
-    if (sort === 'views') return b.views_count - a.views_count
-    if (sort === 'follows') return b.follows_count - a.follows_count
-    if (sort === 'rating') return b.rating - a.rating
-    if (sort === 'latest-created') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    return 0
-  })
+  // type & genre WAJIB dipakai di sini — sebelumnya dua filter itu hanya
+  // mengubah state tombol tanpa menyaring daftar.
+  const filtered = all
+    .filter(m => type === 'semua' || m.type === type)
+    .filter(m => genre === 'Semua' || m.genres.some(g => g.name === genre) || m.tags.includes(genre))
+    .sort((a, b) => {
+      if (sort === 'latest') return (b.latest_chapter?.release_timestamp ?? 0) - (a.latest_chapter?.release_timestamp ?? 0)
+      if (sort === 'views') return b.views_count - a.views_count
+      if (sort === 'follows') return b.follows_count - a.follows_count
+      if (sort === 'rating') return b.rating - a.rating
+      if (sort === 'latest-created') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      return 0
+    })
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)

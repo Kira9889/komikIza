@@ -253,7 +253,7 @@ export default function Comments({ mangaId, chapterId }: { mangaId: string; chap
   )
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md md:p-8">
+    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 sm:backdrop-blur-md md:p-8">
       <h3 className="mb-4 flex items-center gap-2 text-xl font-bold text-white">
         <MessageIcon className="h-5 w-5 text-primary-500" />
         KOMENTAR

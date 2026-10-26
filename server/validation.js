@@ -1,14 +1,19 @@
 import { z } from 'zod'
 
+// Trim/lowercase DULU, baru validasi email. Kalau urutannya dibalik (seperti
+// sebelumnya), email dengan spasi di ujung selalu ditolak sebelum sempat
+// dirapikan — user tidak bisa daftar/login.
 export const loginSchema = z.object({
-  email: z.email('Email tidak valid').trim().toLowerCase(),
+  email: z.string().trim().toLowerCase().pipe(z.email('Email tidak valid')),
   password: z.string().min(1, 'Password wajib diisi').max(128, 'Password terlalu panjang'),
 })
 
 export const registerSchema = z.object({
-  email: z.email('Email tidak valid').trim().toLowerCase().refine(
-    email => /^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(email),
-    'Pendaftaran hanya untuk email @gmail.com',
+  email: z.string().trim().toLowerCase().pipe(
+    z.email('Email tidak valid').refine(
+      email => /^[a-z0-9._%+-]+@(gmail|googlemail)\.com$/i.test(email),
+      'Pendaftaran hanya untuk email @gmail.com',
+    ),
   ),
   username: z.string().trim().min(3, 'Username minimal 3 karakter').max(24, 'Username maksimal 24 karakter'),
   password: z.string().min(6, 'Password minimal 6 karakter').max(128, 'Password terlalu panjang'),

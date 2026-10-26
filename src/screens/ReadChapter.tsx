@@ -26,11 +26,16 @@ export default function ReadChapter() {
     queryKey: queryKeys.manga(slug ?? ''),
     queryFn: () => fetchMangaBySlug(slug ?? ''),
     enabled: !!slug,
+    // Beri kesempatan backend bangun dari cold start sebelum menyerah.
+    retry: 2,
+    retryDelay: attempt => Math.min(1500 * 2 ** attempt, 6000),
   })
   const chaptersQuery = useQuery({
     queryKey: queryKeys.chapters(mangaQuery.data?.id ?? ''),
     queryFn: () => fetchChapters(mangaQuery.data!.id, { slim: true }),
     enabled: !!mangaQuery.data,
+    retry: 2,
+    retryDelay: attempt => Math.min(1500 * 2 ** attempt, 6000),
   })
   const manga: Manga | null = mangaQuery.data ?? null
   const chapters: Chapter[] = chaptersQuery.data ?? []
@@ -38,6 +43,13 @@ export default function ReadChapter() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const [readerControlsOpen, setReaderControlsOpen] = useState(false)
+  // Status pemuatan halaman gambar per chapter (bukan per komponen), supaya
+  // pindah chapter tidak menampilkan "Belum ada halaman" sesaat.
+  const [pagesState, setPagesState] = useState<{ key: string; status: 'loading' | 'ready' | 'error'; error?: string }>({
+    key: '',
+    status: 'loading',
+  })
+  const [pagesAttempt, setPagesAttempt] = useState(0)
   const { recordHistory, isChapterRead, mergeReadChapters } = useLibrary()
   const { user } = useAuth()
   const menuBtnRef = useRef<HTMLButtonElement>(null)
@@ -93,25 +105,72 @@ export default function ReadChapter() {
   }, [slug, chapterId])
 
   // Pilih chapter aktif dari cache (tanpa fetch — manga/chapters via React Query).
+  // Pertahankan pages yang sudah dimuat saat daftar chapter di-refetch,
+  // supaya gambar tidak hilang di tengah membaca.
   useEffect(() => {
-    setCurrent(chapters.find(c => c.id === chapterId) ?? null)
+    setCurrent(prev => {
+      const found = chapters.find(c => c.id === chapterId) ?? null
+      if (!found) return null
+      if (prev && prev.id === found.id && prev.pages.length > 0 && found.pages.length === 0) {
+        return { ...found, pages: prev.pages }
+      }
+      return found
+    })
   }, [chapters, chapterId])
+
+  // Cache dari server/klien bisa saja kosong atau tidak memuat chapter ini
+  // (mis. daftar lama, cold start, atau data fallback). Saat itu terjadi,
+  // minta ulang sekali agar halaman tidak berhenti di "Memuat chapter…".
+  const healRef = useRef('')
+  useEffect(() => {
+    if (!manga || !chapterId) return
+    if (chaptersQuery.isPending || chaptersQuery.isFetching) return
+    if (chapters.some(c => c.id === chapterId)) return
+    const key = `${manga.id}:${chapterId}`
+    if (healRef.current === key) return
+    healRef.current = key
+    void chaptersQuery.refetch()
+  }, [manga?.id, chapterId, chapters, chaptersQuery.isPending, chaptersQuery.isFetching])
+
+  // Manga null bisa berasal dari cache fallback saat backend sempat mati.
+  const mangaHealRef = useRef('')
+  useEffect(() => {
+    if (!slug) return
+    if (mangaQuery.isPending || mangaQuery.isFetching) return
+    if (mangaQuery.data) return
+    if (mangaHealRef.current === slug) return
+    mangaHealRef.current = slug
+    void mangaQuery.refetch()
+  }, [slug, mangaQuery.data, mangaQuery.isPending, mangaQuery.isFetching])
 
   // Pages, riwayat, view, read-chapters hanya untuk chapter yang sedang dibaca.
   const activeOnceRef = useRef<string | null>(null)
   useEffect(() => {
     if (!manga || !current) return
-    if (activeOnceRef.current === `${manga.id}:${current.id}`) return
-    activeOnceRef.current = `${manga.id}:${current.id}`
+    const key = `${manga.id}:${current.id}`
+    if (activeOnceRef.current === key) return
+    activeOnceRef.current = key
     let cancelled = false
     ;(async () => {
       let withPages = current
       // Pages diambil terpisah hanya bila daftar tidak membawanya
       // (mode slim online). Mode offline/mock membawa pages langsung.
       if (!current.pdf_url && current.pages.length === 0) {
-        withPages = { ...current, pages: await fetchShinigamiPages(current.id) }
+        setPagesState({ key, status: 'loading' })
+        try {
+          const pages = await fetchShinigamiPages(current.id)
+          withPages = { ...current, pages }
+        } catch (e) {
+          console.error(e)
+          if (cancelled) return
+          // Izinkan percobaan ulang lewat tombol "Coba lagi".
+          activeOnceRef.current = null
+          setPagesState({ key, status: 'error', error: 'Gagal memuat halaman chapter.' })
+          return
+        }
       }
       if (cancelled) return
+      setPagesState({ key, status: 'ready' })
       setCurrent(withPages)
       recordHistory({ manga_id: manga.id, chapter_id: withPages.id, chapter_name: withPages.name })
       recordView(manga.id)
@@ -122,19 +181,72 @@ export default function ReadChapter() {
     return () => {
       cancelled = true
     }
-  }, [manga?.id, current?.id, user?.id])
+  }, [manga?.id, current?.id, user?.id, pagesAttempt])
 
-  if (!manga || !current) {
+  const retryAll = () => {
+    if (mangaQuery.isError || !mangaQuery.data) void mangaQuery.refetch()
+    if (manga && (chaptersQuery.isError || !chapters.some(c => c.id === chapterId))) {
+      void chaptersQuery.refetch()
+    }
+    activeOnceRef.current = null
+    setPagesAttempt(n => n + 1)
+  }
+
+  // Sedang memuat / mencoba memulihkan data.
+  const resolving =
+    mangaQuery.isPending ||
+    (!manga && mangaQuery.isFetching) ||
+    (!!manga && chaptersQuery.isPending) ||
+    (!!manga && !current && chaptersQuery.isFetching)
+
+  if (resolving) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-24 text-center text-general-400">
-        Memuat chapter…
+      <div className="mx-auto flex min-h-[50vh] max-w-3xl flex-col items-center justify-center gap-3 px-4 py-24 text-center text-general-400">
+        <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-primary-500" />
+        <p className="text-sm">Memuat chapter…</p>
       </div>
+    )
+  }
+
+  if (mangaQuery.isError || chaptersQuery.isError) {
+    return (
+      <ReaderMessage
+        title="Gagal memuat chapter"
+        message="Server tidak merespons atau sedang sibuk. Coba lagi sebentar lagi."
+        onRetry={retryAll}
+        backTo={slug ? `/manga/${slug}` : '/'}
+      />
+    )
+  }
+
+  if (!manga) {
+    return (
+      <ReaderMessage
+        title="Judul tidak ditemukan"
+        message="Judul ini mungkin sudah dihapus atau tautannya salah."
+        onRetry={retryAll}
+        backTo="/"
+      />
+    )
+  }
+
+  if (!current) {
+    return (
+      <ReaderMessage
+        title="Chapter tidak ditemukan"
+        message="Chapter ini mungkin sudah dihapus. Silakan pilih chapter lain dari daftar seri."
+        onRetry={retryAll}
+        backTo={`/manga/${manga.slug}`}
+      />
     )
   }
 
   const idx = chapters.findIndex(c => c.id === current.id)
   const prev = idx > 0 ? chapters[idx - 1] : null
   const next = idx < chapters.length - 1 ? chapters[idx + 1] : null
+  const contentKey = `${manga.id}:${current.id}`
+  const pagesStatus = pagesState.key === contentKey ? pagesState.status : 'loading'
+  const pagesError = pagesStatus === 'error' ? pagesState.error : undefined
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0b0b0d] text-white">
@@ -178,7 +290,7 @@ export default function ReadChapter() {
           </div>
 
           <div className="flex items-center gap-2">
-            {!current.pdf_url && (
+            {!current.pdf_url && pagesStatus === 'ready' && (
               <span className="hidden rounded bg-white/5 px-2 py-1 text-xs text-neutral-400 sm:block">
                 {current.pages.length} halaman
               </span>
@@ -244,6 +356,23 @@ export default function ReadChapter() {
           </div>
           <EndNav prev={prev} next={next} mangaSlug={manga.slug} />
         </>
+      ) : pagesStatus === 'loading' || pagesStatus === 'error' ? (
+        pagesStatus === 'error' ? (
+          <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center gap-3 px-4 py-24 text-center">
+            <p className="text-sm text-red-300">{pagesError ?? 'Gagal memuat halaman chapter.'}</p>
+            <button
+              onClick={retryAll}
+              className="rounded-lg bg-primary-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
+            >
+              Coba lagi
+            </button>
+          </div>
+        ) : (
+          <div className="mx-auto flex min-h-[60vh] w-full max-w-200 flex-col items-center justify-center gap-3 px-4 py-24 text-center text-neutral-400">
+            <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-primary-500" />
+            <p className="text-sm">Memuat halaman…</p>
+          </div>
+        )
       ) : current.pages.length === 0 ? (
         <p className="min-h-screen py-24 text-center text-neutral-400">
           Belum ada halaman. Scroll untuk membaca.
@@ -279,6 +408,39 @@ export default function ReadChapter() {
           onClose={() => setReaderControlsOpen(false)}
         />
       )}
+    </div>
+  )
+}
+
+function ReaderMessage({
+  title,
+  message,
+  onRetry,
+  backTo,
+}: {
+  title: string
+  message: string
+  onRetry: () => void
+  backTo: string
+}) {
+  return (
+    <div className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center gap-3 px-4 py-24 text-center">
+      <h1 className="text-lg font-bold text-neutral-100">{title}</h1>
+      <p className="text-sm leading-relaxed text-neutral-400">{message}</p>
+      <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+        <button
+          onClick={onRetry}
+          className="rounded-lg bg-primary-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary-600"
+        >
+          Coba lagi
+        </button>
+        <Link
+          to={backTo}
+          className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold text-neutral-200 transition hover:border-primary-500 hover:text-primary-400"
+        >
+          Kembali
+        </Link>
+      </div>
     </div>
   )
 }
@@ -352,7 +514,7 @@ function ReaderControls({
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-3 sm:p-5" role="dialog" aria-label="Navigasi chapter">
+    <div className="fixed inset-x-0 bottom-0 z-50 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-5" role="dialog" aria-label="Navigasi chapter">
       <div className="mx-auto flex max-w-xl items-center gap-2 rounded-2xl border border-white/15 bg-[#151519]/95 p-2 shadow-2xl backdrop-blur-xl sm:gap-3 sm:p-3">
         <ChapterControl to={prev ? `/manga/${mangaSlug}/chapter/${prev.id}` : undefined} direction="prev" />
 

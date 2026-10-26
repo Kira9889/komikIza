@@ -50,6 +50,9 @@ export default function Home() {
 
   const reco = data.recommendation[recoTab as keyof HomeCollections['recommendation']]
   const pop = data.popular[popTab as keyof HomeCollections['popular']]
+  // "Mirror" = judul hasil impor sumber (punya shinigami_id); "Project" =
+  // judul yang dikelola sendiri. Sebelumnya tab ini tidak menyaring apa pun.
+  const updates = data.updates.filter(m => (updTab === 'mirror' ? !!m.shinigami_id : !m.shinigami_id))
 
   return (
     <div className="mx-auto max-w-6xl px-4">
@@ -103,11 +106,17 @@ export default function Home() {
             onChange={setUpdTab}
           />
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {data.updates.slice(0, 12).map(m => (
-            <MangaCard key={m.id} manga={m} />
-          ))}
-        </div>
+        {updates.length === 0 ? (
+          <p className="mt-6 rounded-xl border border-(--line) bg-(--card) px-4 py-10 text-center text-sm text-general-400">
+            Belum ada update untuk kategori ini.
+          </p>
+        ) : (
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {updates.slice(0, 12).map(m => (
+              <MangaCard key={m.id} manga={m} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Populer */}

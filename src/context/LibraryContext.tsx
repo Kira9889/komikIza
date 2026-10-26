@@ -116,7 +116,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   // Simpan ke localStorage sebagai cache/mirror
   useEffect(() => {
     if (!ready || loadedUserRef.current !== userId) return
-    localStorage.setItem(storageKey, JSON.stringify(likedIds))
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(likedIds))
+    } catch {
+      /* storage penuh / diblokir (mode privat) — jangan sampai mematikan halaman */
+    }
   }, [likedIds, ready, storageKey, userId])
 
   useEffect(() => {
@@ -131,7 +135,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready || loadedUserRef.current !== userId) return
-    localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 100)))
+    try {
+      localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 100)))
+    } catch {
+      /* storage penuh / diblokir (mode privat) — abaikan */
+    }
   }, [history, historyKey, ready, userId])
 
   // Saat user berubah: tampilkan cache lokal user itu SEKEITKA (tanpa

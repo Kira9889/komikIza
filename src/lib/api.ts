@@ -7,22 +7,30 @@ const LEGACY_TOKEN_KEY = 'izalib_token'
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null
-  const current = localStorage.getItem(TOKEN_KEY)
-  if (current) return current
-  // Migrasi sekali dari key lama IzaLib
-  const legacy = localStorage.getItem(LEGACY_TOKEN_KEY)
-  if (legacy) {
-    localStorage.setItem(TOKEN_KEY, legacy)
-    localStorage.removeItem(LEGACY_TOKEN_KEY)
-    return legacy
+  try {
+    const current = localStorage.getItem(TOKEN_KEY)
+    if (current) return current
+    // Migrasi sekali dari key lama IzaLib
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY)
+    if (legacy) {
+      localStorage.setItem(TOKEN_KEY, legacy)
+      localStorage.removeItem(LEGACY_TOKEN_KEY)
+      return legacy
+    }
+  } catch {
+    /* storage diblokir (mode privat) — anggap belum login */
   }
   return null
 }
 
 export function setToken(token: string | null) {
   if (typeof window === 'undefined') return
-  if (token) localStorage.setItem(TOKEN_KEY, token)
-  else localStorage.removeItem(TOKEN_KEY)
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    /* storage diblokir — token tidak tersimpan, sesi hilang saat reload */
+  }
 }
 
 export function getApiBase() {

@@ -480,7 +480,10 @@ function shinigamiPages(payload) {
 function isAllowedShinigamiImage(value) {
   try {
     const url = new URL(value)
-    return url.protocol === 'https:' && ['storage.shngm.id', 'delivery.shngm.id', 'assets.shngm.id'].includes(url.hostname)
+    // Izinkan seluruh subdomain CDN sumber (bukan cuma tiga host tetap) agar
+    // chapter baru tidak kosong saat sumber memakai host CDN lain, mis.
+    // cdn.shngm.id / img.shngm.id. Tetap batasi ke domain sumber (anti-SSRF).
+    return url.protocol === 'https:' && (url.hostname === 'shngm.id' || url.hostname.endsWith('.shngm.id'))
   } catch {
     return false
   }
@@ -765,6 +768,22 @@ async function getCachedMangaList(force = false) {
 function invalidateMangaCache() {
   mangaCache = null
   mangaCacheTime = 0
+}
+
+// Cache daftar chapter live per seri sumber. Endpoint chapter dipanggil
+// setiap user membuka judul/reader; tanpa cache, upstream yang lambat atau
+// limit bisa membuat sebagian user gagal memuat. Simpan juga hasil terakhir
+// sebagai fallback saat upstream sedang tidak bisa dihubungi.
+const chapterListCache = new Map()
+const CHAPTER_LIST_TTL = 2 * 60 * 1000
+const CHAPTER_LIST_CACHE_MAX = 200
+
+function setChapterListCache(key, chapters) {
+  chapterListCache.set(key, { at: Date.now(), chapters })
+  if (chapterListCache.size > CHAPTER_LIST_CACHE_MAX) {
+    const oldest = chapterListCache.keys().next().value
+    if (oldest !== undefined) chapterListCache.delete(oldest)
+  }
 }
 
 // URL absolut ke backend sendiri (relatif /api/... rusak saat frontend
@@ -1528,13 +1547,22 @@ app.get('/api/manga/:mangaId/chapters', async (req, res) => {
     // Live-first: coba ambil dari sumber. Kalau gagal (mis. IP server
     // diblokir sumber) jatuh ke baris lokal hasil sync agar tidak 500.
     if (source[0].shinigami_id) {
+      const cacheKey = source[0].shinigami_id
+      const cached = chapterListCache.get(cacheKey)
+      if (cached && Date.now() - cached.at < CHAPTER_LIST_TTL) {
+        return res.json(cached.chapters)
+      }
       try {
-        const payload = await shinigamiJson(`/v1/chapter/${encodeURIComponent(source[0].shinigami_id)}/list?page_size=3000`)
+        const payload = await shinigamiJson(`/v1/chapter/${encodeURIComponent(cacheKey)}/list?page_size=3000`)
         const chapters = shinigamiChapters(mangaId, payload)
         await syncShinigamiChapters(mangaId, chapters)
+        setChapterListCache(cacheKey, chapters)
         return res.json(chapters)
       } catch (liveError) {
         console.error(liveError)
+        // Sumber sedang down/lambat: pakai hasil terakhir yang pernah sukses
+        // supaya user lama tidak kehilangan daftar chapter.
+        if (cached) return res.json(cached.chapters)
       }
     }
     // Daftar default slim (tanpa blob pages) supaya judul dengan ratusan

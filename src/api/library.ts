@@ -76,8 +76,11 @@ export async function fetchMangaBySlug(slug: string): Promise<Manga | null> {
     return await apiFetch<Manga>(`/manga/${encodeURIComponent(slug)}`)
   } catch (e: any) {
     console.error(e)
+    // 404 = benar-benar tidak ada. Error lain (timeout / 5xx / rate limit)
+    // JANGAN diubah jadi null: React Query akan menganggapnya sukses dan
+    // menyimpan null di cache, sehingga halaman reader nyangkut.
     if (e.status === 404) return null
-    return storeManga.find(m => m.slug === slug) ?? null
+    throw e
   }
 }
 
@@ -95,7 +98,10 @@ export async function fetchChapters(mangaId: string, opts?: { slim?: boolean }):
     return await apiFetch<Chapter[]>(`/manga/${mangaId}/chapters`, { query: { slim: '1' } })
   } catch (e) {
     console.error(e)
-    return getChaptersCached(mangaId)
+    // Lempar ke React Query supaya status error terlihat & bisa di-retry.
+    // Kalau ditelan lalu diganti mock kosong, halaman reader mengira daftar
+    // chapter sudah termuat (padahal kosong) dan berhenti di "Memuat chapter…".
+    throw e
   }
 }
 
@@ -137,12 +143,9 @@ export async function recordView(mangaId: string): Promise<void> {
 }
 
 export async function fetchShinigamiPages(chapterId: string): Promise<Chapter['pages']> {
-  try {
-    return await apiFetch<Chapter['pages']>(`/shinigami/chapter/${encodeURIComponent(chapterId)}/pages`)
-  } catch (e) {
-    console.error(e)
-    return []
-  }
+  // Biarkan error naik ke pemanggil (reader) agar bisa menampilkan tombol
+  // "Coba lagi". Dulu error ditelan jadi [] sehingga chapter tampak kosong.
+  return apiFetch<Chapter['pages']>(`/shinigami/chapter/${encodeURIComponent(chapterId)}/pages`)
 }
 
 // ---------------------------------------------------------------

@@ -10,7 +10,7 @@ const items = [
 
 export default function MobileNav() {
   return (
-    <nav className="fixed bottom-0 left-0 z-50 w-screen border-t border-(--line) bg-(--bg) lg:hidden">
+    <nav className="fixed bottom-0 left-0 z-50 w-full border-t border-(--line) bg-(--bg) pb-[env(safe-area-inset-bottom)] lg:hidden">
       <div className="grid grid-cols-4">
         {items.map(it => (
           <NavLink

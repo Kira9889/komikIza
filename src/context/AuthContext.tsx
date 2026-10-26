@@ -51,8 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const persist = (u: User | null) => {
-    if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u))
-    else localStorage.removeItem(STORAGE_KEY)
+    // Mode privat / storage penuh bisa melempar QuotaExceededError.
+    // Sesi tetap jalan di memori walau penyimpanan gagal.
+    try {
+      if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u))
+      else localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      /* abaikan — jangan mematikan halaman */
+    }
     setUser(u)
   }
 

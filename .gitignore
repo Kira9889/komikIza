@@ -17,3 +17,5 @@ server/.sync-last-run
 backup.sql
 .worktrees/
 *.tsbuildinfo
+.agents/
+.opencode/

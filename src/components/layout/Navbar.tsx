@@ -94,7 +94,7 @@ export default function Navbar() {
   const closeMenu = () => setOpen(false)
 
   return (
-    <header className="sticky top-0 z-50 border-b border-(--line) bg-(--bg)/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 border-b border-(--line) bg-(--bg)/90 sm:backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <NavLink to="/" className="flex items-center gap-2" onClick={closeMenu}>
           <Logo size={48} />
